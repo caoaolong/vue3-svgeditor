@@ -1,0 +1,45 @@
+# 构建和测试相关
+lgtm.yml
+coverage/**
+.nyc_output
+instrumented/**
+cypress/**
+test/**
+*.test.js
+*.spec.js
+
+# 源代码（只发布构建后的 dist/vue3）
+src/**
+packages/**
+rollup.config.mjs
+web-dev-server.config.mjs
+babel.config.json
+cypress.config.mjs
+nyc.config.js
+
+# 排除标准构建，只发布 Vue3 构建
+dist/editor/**
+
+# 开发依赖
+node_modules/**
+.vscode
+.idea
+.DS_Store
+
+# 文档和示例（可选，如果需要可以移除）
+docs/**
+examples/**
+archive/**
+
+# Git 相关
+.git/**
+.gitignore
+.github/**
+
+# 其他配置文件
+.eslintrc*
+.prettierrc*
+.editorconfig
+*.log
+*.map
+!dist/**/*.map
