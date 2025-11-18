@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: dialogs/imagePropertiesDialog.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: dialogs/imagePropertiesDialog.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import SvgCanvas from '@svgedit/svgcanvas'
+/* globals svgEditor */
+import imagePropertiesDialogHTML from './imagePropertiesDialog.html'
+
+const { isValidUnit } = SvgCanvas
+
+const template = document.createElement('template')
+template.innerHTML = imagePropertiesDialogHTML
+/**
+ * @class SeImgPropDialog
+ */
+export class SeImgPropDialog extends HTMLElement {
+  /**
+    * @function constructor
+    */
+  constructor () {
+    super()
+    // create the shadowDom and insert the template
+    this.eventlisten = false
+    this._shadowRoot = this.attachShadow({ mode: 'open' })
+    this._shadowRoot.append(template.content.cloneNode(true))
+    this.$saveBtn = this._shadowRoot.querySelector('#tool_docprops_save')
+    this.$cancelBtn = this._shadowRoot.querySelector('#tool_docprops_cancel')
+    this.$resolution = this._shadowRoot.querySelector('#resolution')
+    this.$canvasTitle = this._shadowRoot.querySelector('#canvas_title')
+    this.$canvasWidth = this._shadowRoot.querySelector('#canvas_width')
+    this.$canvasHeight = this._shadowRoot.querySelector('#canvas_height')
+    this.$imageOptEmbed = this._shadowRoot.querySelector('#image_embed')
+    this.$imageOptRef = this._shadowRoot.querySelector('#image_ref')
+    this.$dialog = this._shadowRoot.querySelector('#svg_docprops')
+  }
+
+  /**
+   * @function init
+   * @param {any} name
+   * @returns {void}
+   */
+  init (i18next) {
+    this.setAttribute('common-ok', i18next.t('common.ok'))
+    this.setAttribute('common-cancel', i18next.t('common.cancel'))
+    this.setAttribute('config-image_props', i18next.t('config.image_props'))
+    this.setAttribute('config-doc_title', i18next.t('config.doc_title'))
+    this.setAttribute('config-doc_dims', i18next.t('config.doc_dims'))
+    this.setAttribute('common-width', i18next.t('common.width'))
+    this.setAttribute('common-height', i18next.t('common.height'))
+    this.setAttribute('config-select_predefined', i18next.t('config.select_predefined'))
+    this.setAttribute('tools-fit-to-content', i18next.t('tools.fitToContent'))
+    this.setAttribute('config-included_images', i18next.t('config.included_images'))
+    this.setAttribute('config-image_opt_embed', i18next.t('config.image_opt_embed'))
+    this.setAttribute('config-image_opt_ref', i18next.t('config.image_opt_ref'))
+  }
+
+  /**
+   * @function observedAttributes
+   * @returns {any} observed
+   */
+  static get observedAttributes () {
+    return ['title', 'width', 'height', 'save', 'dialog', 'embed', 'common-ok',
+      'common-cancel', 'config-image_props', 'config-doc_title', 'config-doc_dims',
+      'common-width', 'common-height', 'config-select_predefined',
+      'tools-fit-to-content', 'config-included_images', 'config-image_opt_embed',
+      'config-image_opt_ref']
+  }
+
+  /**
+   * @function attributeChangedCallback
+   * @param {string} name
+   * @param {string} oldValue
+   * @param {string} newValue
+   * @returns {void}
+   */
+  attributeChangedCallback (name, oldValue, newValue) {
+    if (oldValue === newValue) return
+    let node
+    switch (name) {
+      case 'title':
+        this.$canvasTitle.value = newValue
+        break
+      case 'width':
+        if (newValue === 'fit') {
+          this.$canvasWidth.removeAttribute('disabled')
+          this.$canvasWidth.value = 100
+          this.$canvasHeight.removeAttribute('disabled')
+          this.$canvasHeight.value = 100
+        } else {
+          this.$canvasWidth.value = newValue
+        }
+        break
+      case 'height':
+        if (newValue === 'fit') {
+          this.$canvasWidth.removeAttribute('disabled')
+          this.$canvasWidth.value = 100
+          this.$canvasHeight.removeAttribute('disabled')
+          this.$canvasHeight.value = 100
+        } else {
+          this.$canvasHeight.value = newValue
+        }
+        break
+      case 'dialog':
+        if (this.eventlisten) {
+          if (newValue === 'open') {
+            this.$dialog.open()
+          } else {
+            this.$dialog.close()
+          }
+        }
+        break
+      case 'save':
+        if (newValue === 'ref') {
+          this.$imageOptEmbed.setAttribute('checked', false)
+          this.$imageOptRef.setAttribute('checked', true)
+        } else {
+          this.$imageOptEmbed.setAttribute('checked', true)
+          this.$imageOptRef.setAttribute('checked', false)
+        }
+        break
+      case 'embed':
+        if (newValue.includes('one')) {
+          const data = newValue.split('|')
+          if (data.length > 1) {
+            this._shadowRoot.querySelector('#image_opt_embed').setAttribute('title', data[1])
+            this._shadowRoot.querySelector('#image_opt_embed').setAttribute('disabled', 'disabled')
+            this._shadowRoot.querySelector('#image_opt_embed').style.color = '#666'
+          }
+        }
+        break
+      case 'common-ok':
+        this.$saveBtn.textContent = newValue
+        break
+      case 'common-cancel':
+        this.$cancelBtn.textContent = newValue
+        break
+      case 'config-image_props':
+        node = this._shadowRoot.querySelector('#svginfo_image_props')
+        node.textContent = newValue
+        break
+      case 'config-doc_title':
+        node = this._shadowRoot.querySelector('#svginfo_title')
+        node.textContent = newValue
+        break
+      case 'config-doc_dims':
+        node = this._shadowRoot.querySelector('#svginfo_dim')
+        node.textContent = newValue
+        break
+      case 'common-width':
+        node = this._shadowRoot.querySelector('#svginfo_width')
+        node.textContent = newValue
+        break
+      case 'common-height':
+        node = this._shadowRoot.querySelector('#svginfo_height')
+        node.textContent = newValue
+        break
+      case 'config-select_predefined':
+        node = this._shadowRoot.querySelector('#selectedPredefined')
+        node.textContent = newValue
+        break
+      case 'tools-fit-to-content':
+        node = this._shadowRoot.querySelector('#fitToContent')
+        node.textContent = newValue
+        break
+      case 'config-included_images':
+        node = this._shadowRoot.querySelector('#includedImages')
+        node.textContent = newValue
+        break
+      case 'config-image_opt_embed':
+        node = this._shadowRoot.querySelector('#image_opt_embed')
+        node.textContent = newValue
+        break
+      case 'config-image_opt_ref':
+        node = this._shadowRoot.querySelector('#image_opt_ref')
+        node.textContent = newValue
+        break
+      default:
+        super.attributeChangedCallback(name, oldValue, newValue)
+        break
+    }
+  }
+
+  /**
+   * @function get
+   * @returns {any}
+   */
+  get title () {
+    return this.getAttribute('title')
+  }
+
+  /**
+   * @function set
+   * @returns {void}
+   */
+  set title (value) {
+    this.setAttribute('title', value)
+  }
+
+  /**
+   * @function get
+   * @returns {any}
+   */
+  get width () {
+    return this.getAttribute('width')
+  }
+
+  /**
+   * @function set
+   * @returns {void}
+   */
+  set width (value) {
+    this.setAttribute('width', value)
+  }
+
+  /**
+   * @function get
+   * @returns {any}
+   */
+  get height () {
+    return this.getAttribute('height')
+  }
+
+  /**
+   * @function set
+   * @returns {void}
+   */
+  set height (value) {
+    this.setAttribute('height', value)
+  }
+
+  /**
+   * @function get
+   * @returns {any}
+   */
+  get save () {
+    return this.getAttribute('save')
+  }
+
+  /**
+   * @function set
+   * @returns {void}
+   */
+  set save (value) {
+    this.setAttribute('save', value)
+  }
+
+  /**
+   * @function get
+   * @returns {any}
+   */
+  get dialog () {
+    return this.getAttribute('dialog')
+  }
+
+  /**
+   * @function set
+   * @returns {void}
+   */
+  set dialog (value) {
+    this.setAttribute('dialog', value)
+  }
+
+  /**
+   * @function get
+   * @returns {any}
+   */
+  get embed () {
+    return this.getAttribute('embed')
+  }
+
+  /**
+   * @function set
+   * @returns {void}
+   */
+  set embed (value) {
+    this.setAttribute('embed', value)
+  }
+
+  /**
+   * @function connectedCallback
+   * @returns {void}
+   */
+  connectedCallback () {
+    const onChangeHandler = (ev) => {
+      if (!ev.target.selectedIndex) {
+        if (this.$canvasWidth.value === 'fit') {
+          this.$canvasWidth.removeAttribute('disabled')
+          this.$canvasWidth.value = 100
+          this.$canvasHeight.removeAttribute('disabled')
+          this.$canvasHeight.value = 100
+        }
+      } else if (ev.target.value === 'content') {
+        this.$canvasWidth.setAttribute('disabled', 'disabled')
+        this.$canvasWidth.value = 'fit'
+        this.$canvasHeight.setAttribute('disabled', 'disabled')
+        this.$canvasHeight.value = 'fit'
+      } else {
+        const dims = ev.target.value.split('x')
+        this.$canvasWidth.value = dims[0]
+        this.$canvasWidth.removeAttribute('disabled')
+        this.$canvasHeight.value = dims[1]
+        this.$canvasHeight.removeAttribute('disabled')
+      }
+    }
+    const onSaveHandler = () => {
+      let saveOpt = ''
+      const w = this.$canvasWidth.value
+      const h = this.$canvasHeight.value
+      if (w !== 'fit' &amp;&amp; !isValidUnit('width', w)) {
+        this.$canvasWidth.parentElement.classList.add('error')
+      } else {
+        this.$canvasWidth.parentElement.classList.remove('error')
+      }
+      if (h !== 'fit' &amp;&amp; !isValidUnit('height', w)) {
+        this.$canvasHeight.parentElement.classList.add('error')
+      } else {
+        this.$canvasHeight.parentElement.classList.remove('error')
+      }
+      if (this.$imageOptEmbed.getAttribute('checked') === 'true') {
+        saveOpt = 'embed'
+      }
+      if (this.$imageOptRef.getAttribute('checked') === 'true') {
+        saveOpt = 'ref'
+      }
+      const closeEvent = new CustomEvent('change', {
+        detail: {
+          title: this.$canvasTitle.value,
+          w: this.$canvasWidth.value,
+          h: this.$canvasHeight.value,
+          save: saveOpt,
+          dialog: 'close'
+        }
+      })
+      this.$canvasWidth.removeAttribute('disabled')
+      this.$canvasHeight.removeAttribute('disabled')
+      this.$resolution.selectedIndex = 0
+      this.dispatchEvent(closeEvent)
+    }
+    const onCancelHandler = () => {
+      const closeEvent = new CustomEvent('change', {
+        detail: {
+          dialog: 'closed'
+        }
+      })
+      this.$canvasWidth.removeAttribute('disabled')
+      this.$canvasHeight.removeAttribute('disabled')
+      this.$resolution.selectedIndex = 0
+      this.dispatchEvent(closeEvent)
+    }
+    this.$resolution.addEventListener('change', onChangeHandler)
+    svgEditor.$click(this.$saveBtn, onSaveHandler)
+    svgEditor.$click(this.$cancelBtn, onCancelHandler)
+    this.$dialog.addEventListener('close', onCancelHandler)
+    this.eventlisten = true
+  }
+}
+
+// Register
+customElements.define('se-img-prop-dialog', SeImgPropDialog)
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="editor_extensions_ext-layer_view_locale_zh-CN.module_js.html">editor/extensions/ext-layer_view/locale/zh-CN.js</a></li><li><a href="module-SVGEditor.html">SVGEditor</a></li><li><a href="module-contextmenu.html">contextmenu</a></li><li><a href="module-jGraduate.html">jGraduate</a></li><li><a href="module-jPicker.html">jPicker</a></li><li><a href="module-locale.html">locale</a></li></ul><h3>Externals</h3><ul><li><a href="external-JamilihArray.html">JamilihArray</a></li><li><a href="external-Math.html">Math</a></li><li><a href="external-Window.html">Window</a></li><li><a href="external-jQuery.html">jQuery</a></li></ul><h3>Namespaces</h3><ul><li><a href="external-jQuery.fn.html">fn</a></li><li><a href="external-jQuery.fn.$.fn.jPicker.defaults.html">defaults</a></li><li><a href="external-jQuery.fn.exports.jPickerMethod.html">exports.jPickerMethod</a></li><li><a href="external-jQuery.fn.jGraduateDefaults.html">jGraduateDefaults</a></li><li><a href="external-jQuery.fn.jGraduateDefaults.images.html">images</a></li><li><a href="external-jQuery.fn.jGraduateDefaults.window.html">window</a></li><li><a href="external-jQuery.jGraduate.html">jGraduate</a></li><li><a href="external-jQuery.jPicker.html">jPicker</a></li><li><a href="external-jQuery.jPicker.ColorMethods.html">ColorMethods</a></li></ul><h3>Classes</h3><ul><li><a href="BottomPanel.html">BottomPanel</a></li><li><a href="Dropdown.html">Dropdown</a></li><li><a href="EditorStartup.html">EditorStartup</a></li><li><a href="ElixMenuButton.html">ElixMenuButton</a></li><li><a href="ElixNumberSpinBox.html">ElixNumberSpinBox</a></li><li><a href="ExplorerButton.html">ExplorerButton</a></li><li><a href="FlyingButton.html">FlyingButton</a></li><li><a href="LayersPanel.html">LayersPanel</a></li><li><a href="LeftPanel.html">LeftPanel</a></li><li><a href="MainMenu.html">MainMenu</a></li><li><a href="NumberSpinBox.html">NumberSpinBox</a></li><li><a href="PaintBox.html">PaintBox</a></li><li><a href="PlainNumberSpinBox.html">PlainNumberSpinBox</a></li><li><a href="Rulers.html">Rulers</a></li><li><a href="SEInput.html">SEInput</a></li><li><a href="SEPalette.html">SEPalette</a></li><li><a href="SESpinInput.html">SESpinInput</a></li><li><a href="SeCMenuDialog.html">SeCMenuDialog</a></li><li><a href="SeCMenuLayerDialog.html">SeCMenuLayerDialog</a></li><li><a href="SeColorPicker.html">SeColorPicker</a></li><li><a href="SeEditPrefsDialog.html">SeEditPrefsDialog</a></li><li><a href="SeExportDialog.html">SeExportDialog</a></li><li><a href="SeImgPropDialog.html">SeImgPropDialog</a></li><li><a href="SeList.html">SeList</a></li><li><a href="SeMenu.html">SeMenu</a></li><li><a href="SeMenuItem.html">SeMenuItem</a></li><li><a href="SePlainAlertDialog.html">SePlainAlertDialog</a></li><li><a href="SePlainBorderButton.html">SePlainBorderButton</a></li><li><a href="SePromptDialog.html">SePromptDialog</a></li><li><a href="SeStorageDialog.html">SeStorageDialog</a></li><li><a href="SeSvgSourceEditorDialog.html">SeSvgSourceEditorDialog</a></li><li><a href="SeText.html">SeText</a></li><li><a href="ToolButton.html">ToolButton</a></li><li><a href="TopPanel.html">TopPanel</a></li><li><a href="configObj.html">configObj</a></li><li><a href="external-jQuery.jGraduate.Paint.html">Paint</a></li><li><a href="external-jQuery.jPicker.Color.html">Color</a></li><li><a href="module.exports.html">exports</a></li><li><a href="module.exports_module.exports.html">exports</a></li><li><a href="module-SVGEditor-Editor.html">Editor</a></li><li><a href="module-jPicker.module.exports.html">module.exports</a></li></ul><h3>Interfaces</h3><ul><li><a href="module-SVGEditor.Config.html">Config</a></li><li><a href="module-SVGEditor.Prefs.html">Prefs</a></li><li><a href="module-SVGthis.CustomHandler.html">CustomHandler</a></li><li><a href="module-locale.LocaleEditorInit.html">LocaleEditorInit</a></li></ul><h3>Events</h3><ul><li><a href="module-SVGEditor.html#event:event:svgEditorReadyEvent">svgEditorReadyEvent</a></li></ul><h3>Tutorials</h3><ul><li><a href="tutorial-CanvasAPI.html">CanvasAPI</a></li><li><a href="tutorial-Editor.html">Editor</a></li><li><a href="tutorial-EditorAPI.html">EditorAPI</a></li><li><a href="tutorial-Events.html">Events</a></li><li><a href="tutorial-FrequentlyAskedQuestions.html">Frequently Asked Questions (FAQ)</a></li></ul><h3>Global</h3><ul><li><a href="global.html#attributeChangedCallback">attributeChangedCallback</a></li><li><a href="global.html#connectedCallback">connectedCallback</a></li><li><a href="global.html#constructor">constructor</a></li><li><a href="global.html#createTemplate">createTemplate</a></li><li><a href="global.html#decrement">decrement</a></li><li><a href="global.html#expireCookie">expireCookie</a></li><li><a href="global.html#formatValueFormatthenumericvalueasastring.Thisisusedafterincrementing/decrementingthevaluetoreformatthevalueasastring.">formatValue
+Format the numeric value as a string.
+
+This is used after incrementing/decrementing the value to reformat the
+value as a string.</a></li><li><a href="global.html#get">get</a></li><li><a href="global.html#handleClick">handleClick</a></li><li><a href="global.html#handleClose">handleClose</a></li><li><a href="global.html#handleInput">handleInput</a></li><li><a href="global.html#handleKeyDown">handleKeyDown</a></li><li><a href="global.html#handleMouseDown">handleMouseDown</a></li><li><a href="global.html#handleMouseUp">handleMouseUp</a></li><li><a href="global.html#handleOptionsChange">handleOptionsChange</a></li><li><a href="global.html#handleSelect">handleSelect</a></li><li><a href="global.html#handleShow">handleShow</a></li><li><a href="global.html#increment">increment</a></li><li><a href="global.html#init">init</a></li><li><a href="global.html#inputsize">inputsize</a></li><li><a href="global.html#isNullish">isNullish</a></li><li><a href="global.html#loadloadConfig">load load Config</a></li><li><a href="global.html#loadFromURLLoadconfig/datafromURLifgiven">loadFromURL Load config/data from URL if given</a></li><li><a href="global.html#name">name</a></li><li><a href="global.html#observedAttributes">observedAttributes</a></li><li><a href="global.html#parseValue">parseValue</a></li><li><a href="global.html#pref">pref</a></li><li><a href="global.html#readySignal">readySignal</a></li><li><a href="global.html#regexEscape">regexEscape</a></li><li><a href="global.html#removeStoragePrefCookie">removeStoragePrefCookie</a></li><li><a href="global.html#replaceStoragePrompt">replaceStoragePrompt</a></li><li><a href="global.html#resolveModulePathToUrl">resolveModulePathToUrl</a></li><li><a href="global.html#set">set</a></li><li><a href="global.html#setupCurConfig">setupCurConfig</a></li><li><a href="global.html#setupCurPrefs">setupCurPrefs</a></li><li><a href="global.html#src">src</a></li><li><a href="global.html#stateEffects">stateEffects</a></li><li><a href="global.html#stepDown">stepDown</a></li><li><a href="global.html#stepUp">stepUp</a></li><li><a href="global.html#triggerInputChanged">triggerInputChanged</a></li><li><a href="global.html#updateLib">updateLib</a></li><li><a href="global.html#value">value</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.4</a> on Tue Nov 18 2025 06:01:53 GMT+0000 (Coordinated Universal Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

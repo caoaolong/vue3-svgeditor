@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: extensions/ext-grid/ext-grid.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: extensions/ext-grid/ext-grid.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * @file ext-grid.js
+ *
+ * @license Apache-2.0
+ *
+ * @copyright 2010 Redou Mine, 2010 Alexis Deveria
+ *
+ */
+
+const name = 'grid'
+
+const loadExtensionTranslation = async function (svgEditor) {
+  let translationModule
+  const lang = svgEditor.configObj.pref('lang')
+  try {
+    translationModule = await import(`./locale/${lang}.js`)
+  } catch (_error) {
+    console.warn(`Missing translation (${lang}) for ${name} - using 'en'`)
+    translationModule = await import('./locale/en.js')
+  }
+  svgEditor.i18next.addResourceBundle(lang, name, translationModule.default)
+}
+
+export default {
+  name,
+  async init () {
+    const svgEditor = this
+    await loadExtensionTranslation(svgEditor)
+    const { svgCanvas } = svgEditor
+    const { $id, $click, NS } = svgCanvas
+    const svgdoc = $id('svgcanvas').ownerDocument
+    const { assignAttributes } = svgCanvas
+    const hcanvas = document.createElement('canvas')
+    const canvBG = $id('canvasBackground')
+    const units = svgCanvas.getTypeMap() // Assumes prior `init()` call on `units.js` module
+    const intervals = [0.01, 0.1, 1, 10, 100, 1000]
+    let showGrid = svgEditor.configObj.curConfig.showGrid || false
+
+    hcanvas.style.display = 'none'
+    svgEditor.$svgEditor.appendChild(hcanvas)
+
+    const canvasGrid = svgdoc.createElementNS(NS.SVG, 'svg')
+    assignAttributes(canvasGrid, {
+      id: 'canvasGrid',
+      width: '100%',
+      height: '100%',
+      x: 0,
+      y: 0,
+      overflow: 'visible',
+      display: 'none'
+    })
+    canvBG.appendChild(canvasGrid)
+    const gridDefs = svgdoc.createElementNS(NS.SVG, 'defs')
+    // grid-pattern
+    const gridPattern = svgdoc.createElementNS(NS.SVG, 'pattern')
+    assignAttributes(gridPattern, {
+      id: 'gridpattern',
+      patternUnits: 'userSpaceOnUse',
+      x: 0, // -(value.strokeWidth / 2), // position for strokewidth
+      y: 0, // -(value.strokeWidth / 2), // position for strokewidth
+      width: 100,
+      height: 100
+    })
+
+    const gridimg = svgdoc.createElementNS(NS.SVG, 'image')
+    assignAttributes(gridimg, {
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 100
+    })
+    gridPattern.append(gridimg)
+    gridDefs.append(gridPattern)
+    $id('canvasGrid').appendChild(gridDefs)
+
+    // grid-box
+    const gridBox = svgdoc.createElementNS(NS.SVG, 'rect')
+    assignAttributes(gridBox, {
+      width: '100%',
+      height: '100%',
+      x: 0,
+      y: 0,
+      'stroke-width': 0,
+      stroke: 'none',
+      fill: 'url(#gridpattern)',
+      style: 'pointer-events: none; display:visible;'
+    })
+    $id('canvasGrid').appendChild(gridBox)
+
+    /**
+     *
+     * @param {Float} zoom
+     * @returns {void}
+     */
+    const updateGrid = (zoom) => {
+      // TODO: Try this with &lt;line> elements, then compare performance difference
+      const unit = units[svgEditor.configObj.curConfig.baseUnit] // 1 = 1px
+      const uMulti = unit * zoom
+      // Calculate the main number interval
+      const rawM = 100 / uMulti
+      let multi = 1
+      intervals.some((num) => {
+        multi = num
+        return rawM &lt;= num
+      })
+      const bigInt = multi * uMulti
+
+      // Set the canvas size to the width of the container
+      hcanvas.width = bigInt
+      hcanvas.height = bigInt
+      const ctx = hcanvas.getContext('2d')
+      const curD = 0.5
+      const part = bigInt / 10
+
+      ctx.globalAlpha = 0.2
+      ctx.strokeStyle = svgEditor.configObj.curConfig.gridColor
+      for (let i = 1; i &lt; 10; i++) {
+        const subD = Math.round(part * i) + 0.5
+        // const lineNum = (i % 2)?12:10;
+        const lineNum = 0
+        ctx.moveTo(subD, bigInt)
+        ctx.lineTo(subD, lineNum)
+        ctx.moveTo(bigInt, subD)
+        ctx.lineTo(lineNum, subD)
+      }
+      ctx.stroke()
+      ctx.beginPath()
+      ctx.globalAlpha = 0.5
+      ctx.moveTo(curD, bigInt)
+      ctx.lineTo(curD, 0)
+
+      ctx.moveTo(bigInt, curD)
+      ctx.lineTo(0, curD)
+      ctx.stroke()
+
+      const datauri = hcanvas.toDataURL('image/png')
+      gridimg.setAttribute('width', bigInt)
+      gridimg.setAttribute('height', bigInt)
+      gridimg.parentNode.setAttribute('width', bigInt)
+      gridimg.parentNode.setAttribute('height', bigInt)
+      svgCanvas.setHref(gridimg, datauri)
+    }
+
+    /**
+     *
+     * @returns {void}
+     */
+    const gridUpdate = () => {
+      if (showGrid) {
+        updateGrid(svgCanvas.getZoom())
+      }
+      $id('canvasGrid').style.display = (showGrid) ? 'block' : 'none'
+      $id('view_grid').pressed = showGrid
+    }
+    return {
+      name: svgEditor.i18next.t(`${name}:name`),
+      zoomChanged (zoom) {
+        if (showGrid) { updateGrid(zoom) }
+      },
+      callback () {
+        // Add the button and its handler(s)
+        const buttonTemplate = document.createElement('template')
+        const title = `${name}:buttons.0.title`
+        buttonTemplate.innerHTML = `
+          &lt;se-button id="view_grid" title="${title}" src="grid.svg">&lt;/se-button>
+        `
+        $id('editor_panel').append(buttonTemplate.content.cloneNode(true))
+        $click($id('view_grid'), () => {
+          svgEditor.configObj.curConfig.showGrid = showGrid = !showGrid
+          gridUpdate()
+        })
+        if (showGrid) {
+          gridUpdate()
+        }
+      }
+    }
+  }
+}
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="editor_extensions_ext-layer_view_locale_zh-CN.module_js.html">editor/extensions/ext-layer_view/locale/zh-CN.js</a></li><li><a href="module-SVGEditor.html">SVGEditor</a></li><li><a href="module-contextmenu.html">contextmenu</a></li><li><a href="module-jGraduate.html">jGraduate</a></li><li><a href="module-jPicker.html">jPicker</a></li><li><a href="module-locale.html">locale</a></li></ul><h3>Externals</h3><ul><li><a href="external-JamilihArray.html">JamilihArray</a></li><li><a href="external-Math.html">Math</a></li><li><a href="external-Window.html">Window</a></li><li><a href="external-jQuery.html">jQuery</a></li></ul><h3>Namespaces</h3><ul><li><a href="external-jQuery.fn.html">fn</a></li><li><a href="external-jQuery.fn.$.fn.jPicker.defaults.html">defaults</a></li><li><a href="external-jQuery.fn.exports.jPickerMethod.html">exports.jPickerMethod</a></li><li><a href="external-jQuery.fn.jGraduateDefaults.html">jGraduateDefaults</a></li><li><a href="external-jQuery.fn.jGraduateDefaults.images.html">images</a></li><li><a href="external-jQuery.fn.jGraduateDefaults.window.html">window</a></li><li><a href="external-jQuery.jGraduate.html">jGraduate</a></li><li><a href="external-jQuery.jPicker.html">jPicker</a></li><li><a href="external-jQuery.jPicker.ColorMethods.html">ColorMethods</a></li></ul><h3>Classes</h3><ul><li><a href="BottomPanel.html">BottomPanel</a></li><li><a href="Dropdown.html">Dropdown</a></li><li><a href="EditorStartup.html">EditorStartup</a></li><li><a href="ElixMenuButton.html">ElixMenuButton</a></li><li><a href="ElixNumberSpinBox.html">ElixNumberSpinBox</a></li><li><a href="ExplorerButton.html">ExplorerButton</a></li><li><a href="FlyingButton.html">FlyingButton</a></li><li><a href="LayersPanel.html">LayersPanel</a></li><li><a href="LeftPanel.html">LeftPanel</a></li><li><a href="MainMenu.html">MainMenu</a></li><li><a href="NumberSpinBox.html">NumberSpinBox</a></li><li><a href="PaintBox.html">PaintBox</a></li><li><a href="PlainNumberSpinBox.html">PlainNumberSpinBox</a></li><li><a href="Rulers.html">Rulers</a></li><li><a href="SEInput.html">SEInput</a></li><li><a href="SEPalette.html">SEPalette</a></li><li><a href="SESpinInput.html">SESpinInput</a></li><li><a href="SeCMenuDialog.html">SeCMenuDialog</a></li><li><a href="SeCMenuLayerDialog.html">SeCMenuLayerDialog</a></li><li><a href="SeColorPicker.html">SeColorPicker</a></li><li><a href="SeEditPrefsDialog.html">SeEditPrefsDialog</a></li><li><a href="SeExportDialog.html">SeExportDialog</a></li><li><a href="SeImgPropDialog.html">SeImgPropDialog</a></li><li><a href="SeList.html">SeList</a></li><li><a href="SeMenu.html">SeMenu</a></li><li><a href="SeMenuItem.html">SeMenuItem</a></li><li><a href="SePlainAlertDialog.html">SePlainAlertDialog</a></li><li><a href="SePlainBorderButton.html">SePlainBorderButton</a></li><li><a href="SePromptDialog.html">SePromptDialog</a></li><li><a href="SeStorageDialog.html">SeStorageDialog</a></li><li><a href="SeSvgSourceEditorDialog.html">SeSvgSourceEditorDialog</a></li><li><a href="SeText.html">SeText</a></li><li><a href="ToolButton.html">ToolButton</a></li><li><a href="TopPanel.html">TopPanel</a></li><li><a href="configObj.html">configObj</a></li><li><a href="external-jQuery.jGraduate.Paint.html">Paint</a></li><li><a href="external-jQuery.jPicker.Color.html">Color</a></li><li><a href="module.exports.html">exports</a></li><li><a href="module.exports_module.exports.html">exports</a></li><li><a href="module-SVGEditor-Editor.html">Editor</a></li><li><a href="module-jPicker.module.exports.html">module.exports</a></li></ul><h3>Interfaces</h3><ul><li><a href="module-SVGEditor.Config.html">Config</a></li><li><a href="module-SVGEditor.Prefs.html">Prefs</a></li><li><a href="module-SVGthis.CustomHandler.html">CustomHandler</a></li><li><a href="module-locale.LocaleEditorInit.html">LocaleEditorInit</a></li></ul><h3>Events</h3><ul><li><a href="module-SVGEditor.html#event:event:svgEditorReadyEvent">svgEditorReadyEvent</a></li></ul><h3>Tutorials</h3><ul><li><a href="tutorial-CanvasAPI.html">CanvasAPI</a></li><li><a href="tutorial-Editor.html">Editor</a></li><li><a href="tutorial-EditorAPI.html">EditorAPI</a></li><li><a href="tutorial-Events.html">Events</a></li><li><a href="tutorial-FrequentlyAskedQuestions.html">Frequently Asked Questions (FAQ)</a></li></ul><h3>Global</h3><ul><li><a href="global.html#attributeChangedCallback">attributeChangedCallback</a></li><li><a href="global.html#connectedCallback">connectedCallback</a></li><li><a href="global.html#constructor">constructor</a></li><li><a href="global.html#createTemplate">createTemplate</a></li><li><a href="global.html#decrement">decrement</a></li><li><a href="global.html#expireCookie">expireCookie</a></li><li><a href="global.html#formatValueFormatthenumericvalueasastring.Thisisusedafterincrementing/decrementingthevaluetoreformatthevalueasastring.">formatValue
+Format the numeric value as a string.
+
+This is used after incrementing/decrementing the value to reformat the
+value as a string.</a></li><li><a href="global.html#get">get</a></li><li><a href="global.html#handleClick">handleClick</a></li><li><a href="global.html#handleClose">handleClose</a></li><li><a href="global.html#handleInput">handleInput</a></li><li><a href="global.html#handleKeyDown">handleKeyDown</a></li><li><a href="global.html#handleMouseDown">handleMouseDown</a></li><li><a href="global.html#handleMouseUp">handleMouseUp</a></li><li><a href="global.html#handleOptionsChange">handleOptionsChange</a></li><li><a href="global.html#handleSelect">handleSelect</a></li><li><a href="global.html#handleShow">handleShow</a></li><li><a href="global.html#increment">increment</a></li><li><a href="global.html#init">init</a></li><li><a href="global.html#inputsize">inputsize</a></li><li><a href="global.html#isNullish">isNullish</a></li><li><a href="global.html#loadloadConfig">load load Config</a></li><li><a href="global.html#loadFromURLLoadconfig/datafromURLifgiven">loadFromURL Load config/data from URL if given</a></li><li><a href="global.html#name">name</a></li><li><a href="global.html#observedAttributes">observedAttributes</a></li><li><a href="global.html#parseValue">parseValue</a></li><li><a href="global.html#pref">pref</a></li><li><a href="global.html#readySignal">readySignal</a></li><li><a href="global.html#regexEscape">regexEscape</a></li><li><a href="global.html#removeStoragePrefCookie">removeStoragePrefCookie</a></li><li><a href="global.html#replaceStoragePrompt">replaceStoragePrompt</a></li><li><a href="global.html#resolveModulePathToUrl">resolveModulePathToUrl</a></li><li><a href="global.html#set">set</a></li><li><a href="global.html#setupCurConfig">setupCurConfig</a></li><li><a href="global.html#setupCurPrefs">setupCurPrefs</a></li><li><a href="global.html#src">src</a></li><li><a href="global.html#stateEffects">stateEffects</a></li><li><a href="global.html#stepDown">stepDown</a></li><li><a href="global.html#stepUp">stepUp</a></li><li><a href="global.html#triggerInputChanged">triggerInputChanged</a></li><li><a href="global.html#updateLib">updateLib</a></li><li><a href="global.html#value">value</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.4</a> on Tue Nov 18 2025 06:01:53 GMT+0000 (Coordinated Universal Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: components/jgraduate/Slider.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: components/jgraduate/Slider.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import { findPos } from '@svgedit/svgcanvas/common/util.js'
+/**
+ * Whether a value is `null` or `undefined`.
+ * @param {any} val
+ * @returns {boolean}
+ */
+const isNullish = (val) => {
+  return val === null || val === undefined
+}
+/**
+ * Encapsulate slider functionality for the ColorMap and ColorBar -
+ * could be useful to use a jQuery UI draggable for this with certain extensions.
+ * @memberof module:jPicker
+ */
+export default class Slider {
+  /**
+   * @param {external:jQuery} bar
+   * @param {module:jPicker.SliderOptions} options
+   */
+  constructor (bar, options) {
+    const that = this
+    /**
+     * Fire events on the supplied `context`
+     * @param {module:jPicker.JPickerInit} context
+     * @returns {void}
+     */
+    function fireChangeEvents (context) {
+      changeEvents.forEach((changeEvent) => {
+        changeEvent.call(that, that, context)
+      })
+    }
+
+    /**
+     * Bind the mousedown to the bar not the arrow for quick snapping to the clicked location.
+     * @param {external:jQuery.Event} e
+     * @returns {void}
+     */
+    function mouseDown (e) {
+      const off = findPos(bar)
+      offset = { l: off.left | 0, t: off.top | 0 }
+      clearTimeout(timeout)
+      // using setTimeout for visual updates - once the style is updated the browser will re-render internally allowing the next Javascript to run
+      timeout = setTimeout(function () {
+        setValuesFromMousePosition.call(that, e)
+      }, 0)
+      // Bind mousemove and mouseup event to the document so it responds when dragged of of the bar - we will unbind these when on mouseup to save processing
+      document.addEventListener('mousemove', mouseMove)
+      document.addEventListener('mouseup', mouseUp)
+      e.preventDefault() // don't try to select anything or drag the image to the desktop
+    }
+    /**
+     * Set the values as the mouse moves.
+     * @param {external:jQuery.Event} e
+     * @returns {false}
+     */
+    function mouseMove (e) {
+      clearTimeout(timeout)
+      timeout = setTimeout(function () {
+        setValuesFromMousePosition.call(that, e)
+      }, 0)
+      e.stopPropagation()
+      e.preventDefault()
+      return false
+    }
+    /**
+     * Unbind the document events - they aren't needed when not dragging.
+     * @param {external:jQuery.Event} e
+     * @returns {false}
+     */
+    function mouseUp (e) {
+      document.removeEventListener('mousemove', mouseMove)
+      document.removeEventListener('mouseup', mouseUp)
+      e.stopPropagation()
+      e.preventDefault()
+      return false
+    }
+
+    /**
+     * Calculate mouse position and set value within the current range.
+     * @param {Event} e
+     * @returns {void}
+     */
+    function setValuesFromMousePosition (e) {
+      const barW = bar.w // local copies for YUI compressor
+      const barH = bar.h
+      let locX = e.pageX - offset.l
+      let locY = e.pageY - offset.t
+      // keep the arrow within the bounds of the bar
+      if (locX &lt; 0) locX = 0
+      else if (locX > barW) locX = barW
+      if (locY &lt; 0) locY = 0
+      else if (locY > barH) locY = barH
+      val.call(that, 'xy', {
+        x: ((locX / barW) * rangeX) + minX,
+        y: ((locY / barH) * rangeY) + minY
+      })
+    }
+    /**
+     *
+     * @returns {void}
+     */
+    function draw () {
+      const
+        barW = bar.w
+      const barH = bar.h
+      const arrowW = arrow.w
+      const arrowH = arrow.h
+      let arrowOffsetX = 0
+      let arrowOffsetY = 0
+      setTimeout(function () {
+        if (rangeX > 0) { // range is greater than zero
+          // constrain to bounds
+          if (x === maxX) arrowOffsetX = barW
+          else arrowOffsetX = ((x / rangeX) * barW) | 0
+        }
+        if (rangeY > 0) { // range is greater than zero
+          // constrain to bounds
+          if (y === maxY) arrowOffsetY = barH
+          else arrowOffsetY = ((y / rangeY) * barH) | 0
+        }
+        // if arrow width is greater than bar width, center arrow and prevent horizontal dragging
+        if (arrowW >= barW) arrowOffsetX = (barW >> 1) - (arrowW >> 1) // number >> 1 - superfast bitwise divide by two and truncate (move bits over one bit discarding lowest)
+        else arrowOffsetX -= arrowW >> 1
+        // if arrow height is greater than bar height, center arrow and prevent vertical dragging
+        if (arrowH >= barH) arrowOffsetY = (barH >> 1) - (arrowH >> 1)
+        else arrowOffsetY -= arrowH >> 1
+        // set the arrow position based on these offsets
+        arrow.style.left = arrowOffsetX + 'px'
+        arrow.style.top = arrowOffsetY + 'px'
+      })
+    }
+
+    /**
+     * Get or set a value.
+     * @param {?("xy"|"x"|"y")} name
+     * @param {module:math.XYObject} value
+     * @param {module:jPicker.Slider} context
+     * @returns {module:math.XYObject|Float|void}
+     */
+    function val (name, value, context) {
+      const set = value !== undefined
+      if (!set) {
+        if (isNullish(name)) name = 'xy'
+        switch (name.toLowerCase()) {
+          case 'x': return x
+          case 'y': return y
+          case 'xy':
+          default: return { x, y }
+        }
+      }
+      if (!isNullish(context) &amp;&amp; context === that) return undefined
+      let changed = false
+
+      let newX; let newY
+      if (isNullish(name)) name = 'xy'
+      switch (name.toLowerCase()) {
+        case 'x':
+          newX = (value &amp;&amp; ((value.x &amp;&amp; value.x | 0) || value | 0)) || 0
+          break
+        case 'y':
+          newY = (value &amp;&amp; ((value.y &amp;&amp; value.y | 0) || value | 0)) || 0
+          break
+        case 'xy':
+        default:
+          newX = (value &amp;&amp; value.x &amp;&amp; value.x | 0) || 0
+          newY = (value &amp;&amp; value.y &amp;&amp; value.y | 0) || 0
+          break
+      }
+      if (!isNullish(newX)) {
+        if (newX &lt; minX) newX = minX
+        else if (newX > maxX) newX = maxX
+        if (x !== newX) {
+          x = newX
+          changed = true
+        }
+      }
+      if (!isNullish(newY)) {
+        if (newY &lt; minY) newY = minY
+        else if (newY > maxY) newY = maxY
+        if (y !== newY) {
+          y = newY
+          changed = true
+        }
+      }
+      changed &amp;&amp; fireChangeEvents.call(that, context || that)
+      return undefined
+    }
+
+    /**
+    * @typedef {PlainObject} module:jPicker.MinMaxRangeX
+    * @property {Float} minX
+    * @property {Float} maxX
+    * @property {Float} rangeX
+    */
+    /**
+    * @typedef {PlainObject} module:jPicker.MinMaxRangeY
+    * @property {Float} minY
+    * @property {Float} maxY
+    * @property {Float} rangeY
+    */
+    /**
+    * @typedef {module:jPicker.MinMaxRangeY|module:jPicker.MinMaxRangeX} module:jPicker.MinMaxRangeXY
+    */
+
+    /**
+     *
+     * @param {"minx"|"maxx"|"rangex"|"miny"|"maxy"|"rangey"|"all"} name
+     * @param {module:jPicker.MinMaxRangeXY} value
+     * @returns {module:jPicker.MinMaxRangeXY|module:jPicker.MinMaxRangeX|module:jPicker.MinMaxRangeY|void}
+     */
+    function range (name, value) {
+      const set = value !== undefined
+      if (!set) {
+        if (isNullish(name)) name = 'all'
+        switch (name.toLowerCase()) {
+          case 'minx': return minX
+          case 'maxx': return maxX
+          case 'rangex': return { minX, maxX, rangeX }
+          case 'miny': return minY
+          case 'maxy': return maxY
+          case 'rangey': return { minY, maxY, rangeY }
+          case 'all':
+          default: return { minX, maxX, rangeX, minY, maxY, rangeY }
+        }
+      }
+      let // changed = false,
+        newMinX
+      let newMaxX
+      let newMinY
+      let newMaxY
+      if (isNullish(name)) name = 'all'
+      switch (name.toLowerCase()) {
+        case 'minx':
+          newMinX = (value &amp;&amp; ((value.minX &amp;&amp; value.minX | 0) || value | 0)) || 0
+          break
+        case 'maxx':
+          newMaxX = (value &amp;&amp; ((value.maxX &amp;&amp; value.maxX | 0) || value | 0)) || 0
+          break
+        case 'rangex':
+          newMinX = (value &amp;&amp; value.minX &amp;&amp; value.minX | 0) || 0
+          newMaxX = (value &amp;&amp; value.maxX &amp;&amp; value.maxX | 0) || 0
+          break
+        case 'miny':
+          newMinY = (value &amp;&amp; ((value.minY &amp;&amp; value.minY | 0) || value | 0)) || 0
+          break
+        case 'maxy':
+          newMaxY = (value &amp;&amp; ((value.maxY &amp;&amp; value.maxY | 0) || value | 0)) || 0
+          break
+        case 'rangey':
+          newMinY = (value &amp;&amp; value.minY &amp;&amp; value.minY | 0) || 0
+          newMaxY = (value &amp;&amp; value.maxY &amp;&amp; value.maxY | 0) || 0
+          break
+        case 'all':
+        default:
+          newMinX = (value &amp;&amp; value.minX &amp;&amp; value.minX | 0) || 0
+          newMaxX = (value &amp;&amp; value.maxX &amp;&amp; value.maxX | 0) || 0
+          newMinY = (value &amp;&amp; value.minY &amp;&amp; value.minY | 0) || 0
+          newMaxY = (value &amp;&amp; value.maxY &amp;&amp; value.maxY | 0) || 0
+          break
+      }
+
+      if (!isNullish(newMinX) &amp;&amp; minX !== newMinX) {
+        minX = newMinX
+        rangeX = maxX - minX
+      }
+      if (!isNullish(newMaxX) &amp;&amp; maxX !== newMaxX) {
+        maxX = newMaxX
+        rangeX = maxX - minX
+      }
+      if (!isNullish(newMinY) &amp;&amp; minY !== newMinY) {
+        minY = newMinY
+        rangeY = maxY - minY
+      }
+      if (!isNullish(newMaxY) &amp;&amp; maxY !== newMaxY) {
+        maxY = newMaxY
+        rangeY = maxY - minY
+      }
+      return undefined
+    }
+    /**
+    * @param {GenericCallback} callback
+    * @returns {void}
+    */
+    function bind (callback) {
+      if (typeof callback === 'function') changeEvents.push(callback)
+    }
+    /**
+    * @param {GenericCallback} callback
+    * @returns {void}
+    */
+    function unbind (callback) {
+      if (typeof callback !== 'function') return
+      let i
+      while ((i = changeEvents.includes(callback))) changeEvents.splice(i, 1)
+    }
+    /**
+    *
+    * @returns {void}
+    */
+    function destroy () {
+      // unbind all possible events and null objects
+      document.removeEventListener('mousemove', mouseMove)
+      document.removeEventListener('mouseup', mouseUp)
+      bar.removeEventListener('mousedown', mouseDown)
+      bar = null
+      arrow = null
+      changeEvents = null
+    }
+    let offset
+    let timeout
+    let x = 0
+    let y = 0
+    let minX = 0
+    let maxX = 100
+    let rangeX = 100
+    let minY = 0
+    let maxY = 100
+    let rangeY = 100
+    let arrow = bar.querySelector('img') // the arrow image to drag
+    let changeEvents = []
+    Object.assign(that, {
+      val,
+      range,
+      bind,
+      unbind,
+      destroy
+    })
+    // initialize this control
+    arrow.src = options.arrow &amp;&amp; options.arrow.image
+    arrow.w = (options.arrow &amp;&amp; options.arrow.width) || parseFloat(getComputedStyle(arrow, null).width.replace('px', ''))
+    arrow.h = (options.arrow &amp;&amp; options.arrow.height) || parseFloat(getComputedStyle(arrow, null).height.replace('px', ''))
+    bar.w = (options.map &amp;&amp; options.map.width) || parseFloat(getComputedStyle(bar, null).width.replace('px', ''))
+    bar.h = (options.map &amp;&amp; options.map.height) || parseFloat(getComputedStyle(bar, null).height.replace('px', ''))
+    bar.addEventListener('mousedown', mouseDown)
+    bind.call(that, draw)
+  }
+}
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="editor_extensions_ext-layer_view_locale_zh-CN.module_js.html">editor/extensions/ext-layer_view/locale/zh-CN.js</a></li><li><a href="module-SVGEditor.html">SVGEditor</a></li><li><a href="module-contextmenu.html">contextmenu</a></li><li><a href="module-jGraduate.html">jGraduate</a></li><li><a href="module-jPicker.html">jPicker</a></li><li><a href="module-locale.html">locale</a></li></ul><h3>Externals</h3><ul><li><a href="external-JamilihArray.html">JamilihArray</a></li><li><a href="external-Math.html">Math</a></li><li><a href="external-Window.html">Window</a></li><li><a href="external-jQuery.html">jQuery</a></li></ul><h3>Namespaces</h3><ul><li><a href="external-jQuery.fn.html">fn</a></li><li><a href="external-jQuery.fn.$.fn.jPicker.defaults.html">defaults</a></li><li><a href="external-jQuery.fn.exports.jPickerMethod.html">exports.jPickerMethod</a></li><li><a href="external-jQuery.fn.jGraduateDefaults.html">jGraduateDefaults</a></li><li><a href="external-jQuery.fn.jGraduateDefaults.images.html">images</a></li><li><a href="external-jQuery.fn.jGraduateDefaults.window.html">window</a></li><li><a href="external-jQuery.jGraduate.html">jGraduate</a></li><li><a href="external-jQuery.jPicker.html">jPicker</a></li><li><a href="external-jQuery.jPicker.ColorMethods.html">ColorMethods</a></li></ul><h3>Classes</h3><ul><li><a href="BottomPanel.html">BottomPanel</a></li><li><a href="Dropdown.html">Dropdown</a></li><li><a href="EditorStartup.html">EditorStartup</a></li><li><a href="ElixMenuButton.html">ElixMenuButton</a></li><li><a href="ElixNumberSpinBox.html">ElixNumberSpinBox</a></li><li><a href="ExplorerButton.html">ExplorerButton</a></li><li><a href="FlyingButton.html">FlyingButton</a></li><li><a href="LayersPanel.html">LayersPanel</a></li><li><a href="LeftPanel.html">LeftPanel</a></li><li><a href="MainMenu.html">MainMenu</a></li><li><a href="NumberSpinBox.html">NumberSpinBox</a></li><li><a href="PaintBox.html">PaintBox</a></li><li><a href="PlainNumberSpinBox.html">PlainNumberSpinBox</a></li><li><a href="Rulers.html">Rulers</a></li><li><a href="SEInput.html">SEInput</a></li><li><a href="SEPalette.html">SEPalette</a></li><li><a href="SESpinInput.html">SESpinInput</a></li><li><a href="SeCMenuDialog.html">SeCMenuDialog</a></li><li><a href="SeCMenuLayerDialog.html">SeCMenuLayerDialog</a></li><li><a href="SeColorPicker.html">SeColorPicker</a></li><li><a href="SeEditPrefsDialog.html">SeEditPrefsDialog</a></li><li><a href="SeExportDialog.html">SeExportDialog</a></li><li><a href="SeImgPropDialog.html">SeImgPropDialog</a></li><li><a href="SeList.html">SeList</a></li><li><a href="SeMenu.html">SeMenu</a></li><li><a href="SeMenuItem.html">SeMenuItem</a></li><li><a href="SePlainAlertDialog.html">SePlainAlertDialog</a></li><li><a href="SePlainBorderButton.html">SePlainBorderButton</a></li><li><a href="SePromptDialog.html">SePromptDialog</a></li><li><a href="SeStorageDialog.html">SeStorageDialog</a></li><li><a href="SeSvgSourceEditorDialog.html">SeSvgSourceEditorDialog</a></li><li><a href="SeText.html">SeText</a></li><li><a href="ToolButton.html">ToolButton</a></li><li><a href="TopPanel.html">TopPanel</a></li><li><a href="configObj.html">configObj</a></li><li><a href="external-jQuery.jGraduate.Paint.html">Paint</a></li><li><a href="external-jQuery.jPicker.Color.html">Color</a></li><li><a href="module.exports.html">exports</a></li><li><a href="module.exports_module.exports.html">exports</a></li><li><a href="module-SVGEditor-Editor.html">Editor</a></li><li><a href="module-jPicker.module.exports.html">module.exports</a></li></ul><h3>Interfaces</h3><ul><li><a href="module-SVGEditor.Config.html">Config</a></li><li><a href="module-SVGEditor.Prefs.html">Prefs</a></li><li><a href="module-SVGthis.CustomHandler.html">CustomHandler</a></li><li><a href="module-locale.LocaleEditorInit.html">LocaleEditorInit</a></li></ul><h3>Events</h3><ul><li><a href="module-SVGEditor.html#event:event:svgEditorReadyEvent">svgEditorReadyEvent</a></li></ul><h3>Tutorials</h3><ul><li><a href="tutorial-CanvasAPI.html">CanvasAPI</a></li><li><a href="tutorial-Editor.html">Editor</a></li><li><a href="tutorial-EditorAPI.html">EditorAPI</a></li><li><a href="tutorial-Events.html">Events</a></li><li><a href="tutorial-FrequentlyAskedQuestions.html">Frequently Asked Questions (FAQ)</a></li></ul><h3>Global</h3><ul><li><a href="global.html#attributeChangedCallback">attributeChangedCallback</a></li><li><a href="global.html#connectedCallback">connectedCallback</a></li><li><a href="global.html#constructor">constructor</a></li><li><a href="global.html#createTemplate">createTemplate</a></li><li><a href="global.html#decrement">decrement</a></li><li><a href="global.html#expireCookie">expireCookie</a></li><li><a href="global.html#formatValueFormatthenumericvalueasastring.Thisisusedafterincrementing/decrementingthevaluetoreformatthevalueasastring.">formatValue
+Format the numeric value as a string.
+
+This is used after incrementing/decrementing the value to reformat the
+value as a string.</a></li><li><a href="global.html#get">get</a></li><li><a href="global.html#handleClick">handleClick</a></li><li><a href="global.html#handleClose">handleClose</a></li><li><a href="global.html#handleInput">handleInput</a></li><li><a href="global.html#handleKeyDown">handleKeyDown</a></li><li><a href="global.html#handleMouseDown">handleMouseDown</a></li><li><a href="global.html#handleMouseUp">handleMouseUp</a></li><li><a href="global.html#handleOptionsChange">handleOptionsChange</a></li><li><a href="global.html#handleSelect">handleSelect</a></li><li><a href="global.html#handleShow">handleShow</a></li><li><a href="global.html#increment">increment</a></li><li><a href="global.html#init">init</a></li><li><a href="global.html#inputsize">inputsize</a></li><li><a href="global.html#isNullish">isNullish</a></li><li><a href="global.html#loadloadConfig">load load Config</a></li><li><a href="global.html#loadFromURLLoadconfig/datafromURLifgiven">loadFromURL Load config/data from URL if given</a></li><li><a href="global.html#name">name</a></li><li><a href="global.html#observedAttributes">observedAttributes</a></li><li><a href="global.html#parseValue">parseValue</a></li><li><a href="global.html#pref">pref</a></li><li><a href="global.html#readySignal">readySignal</a></li><li><a href="global.html#regexEscape">regexEscape</a></li><li><a href="global.html#removeStoragePrefCookie">removeStoragePrefCookie</a></li><li><a href="global.html#replaceStoragePrompt">replaceStoragePrompt</a></li><li><a href="global.html#resolveModulePathToUrl">resolveModulePathToUrl</a></li><li><a href="global.html#set">set</a></li><li><a href="global.html#setupCurConfig">setupCurConfig</a></li><li><a href="global.html#setupCurPrefs">setupCurPrefs</a></li><li><a href="global.html#src">src</a></li><li><a href="global.html#stateEffects">stateEffects</a></li><li><a href="global.html#stepDown">stepDown</a></li><li><a href="global.html#stepUp">stepUp</a></li><li><a href="global.html#triggerInputChanged">triggerInputChanged</a></li><li><a href="global.html#updateLib">updateLib</a></li><li><a href="global.html#value">value</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.4</a> on Tue Nov 18 2025 06:01:53 GMT+0000 (Coordinated Universal Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

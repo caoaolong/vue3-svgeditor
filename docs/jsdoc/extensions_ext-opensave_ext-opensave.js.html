@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: extensions/ext-opensave/ext-opensave.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: extensions/ext-opensave/ext-opensave.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/* globals seConfirm */
+/**
+ * @file ext-opensave.js
+ *
+ * @license MIT
+ *
+ * @copyright 2020 OptimistikSAS
+ *
+ */
+
+/**
+   * @type {module:svgcanvas.EventHandler}
+   * @param {external:Window} wind
+   * @param {module:svgcanvas.SvgCanvas#event:saved} svg The SVG source
+   * @listens module:svgcanvas.SvgCanvas#event:saved
+   * @returns {void}
+   */
+import { fileOpen, fileSave } from 'browser-fs-access'
+
+const name = 'opensave'
+let handle = null
+
+const loadExtensionTranslation = async function (svgEditor) {
+  let translationModule
+  const lang = svgEditor.configObj.pref('lang')
+  try {
+    translationModule = await import(`./locale/${lang}.js`)
+  } catch (_error) {
+    console.warn(`Missing translation (${lang}) for ${name} - using 'en'`)
+    translationModule = await import('./locale/en.js')
+  }
+  svgEditor.i18next.addResourceBundle(lang, 'translation', translationModule.default, true, true)
+}
+
+export default {
+  name,
+  async init (_S) {
+    const svgEditor = this
+    const { svgCanvas } = svgEditor
+    const { $id, $click } = svgCanvas
+    await loadExtensionTranslation(svgEditor)
+    /**
+    * @param {Event} e
+    * @returns {void}
+    */
+    const importImage = (e) => {
+      // only import files
+      if (!e.dataTransfer.types.includes('Files')) return
+
+      $id('se-prompt-dialog').title = this.i18next.t('notification.loadingImage')
+      $id('se-prompt-dialog').setAttribute('close', false)
+      e.stopPropagation()
+      e.preventDefault()
+      const file = (e.type === 'drop') ? e.dataTransfer.files[0] : e.currentTarget.files[0]
+      if (!file) {
+        $id('se-prompt-dialog').setAttribute('close', true)
+        return
+      }
+
+      if (!file.type.includes('image')) {
+        return
+      }
+      // Detected an image
+      // svg handling
+      let reader
+      if (file.type.includes('svg')) {
+        reader = new FileReader()
+        reader.onloadend = (ev) => {
+          // imgImport.shiftKey (shift key pressed or not) will determine if import should preserve dimension)
+          const newElement = this.svgCanvas.importSvgString(ev.target.result, imgImport.shiftKey)
+          this.svgCanvas.alignSelectedElements('m', 'page')
+          this.svgCanvas.alignSelectedElements('c', 'page')
+          // highlight imported element, otherwise we get strange empty selectbox
+          this.svgCanvas.selectOnly([newElement])
+          $id('se-prompt-dialog').setAttribute('close', true)
+        }
+        reader.readAsText(file)
+      } else {
+        // bitmap handling
+        reader = new FileReader()
+        reader.onloadend = ({ target: { result } }) => {
+          /**
+              * Insert the new image until we know its dimensions.
+              * @param {Float} imageWidth
+              * @param {Float} imageHeight
+              * @returns {void}
+              */
+          const insertNewImage = (imageWidth, imageHeight) => {
+            const newImage = this.svgCanvas.addSVGElementsFromJson({
+              element: 'image',
+              attr: {
+                x: 0,
+                y: 0,
+                width: imageWidth,
+                height: imageHeight,
+                id: this.svgCanvas.getNextId(),
+                style: 'pointer-events:inherit'
+              }
+            })
+            this.svgCanvas.setHref(newImage, result)
+            this.svgCanvas.selectOnly([newImage])
+            this.svgCanvas.alignSelectedElements('m', 'page')
+            this.svgCanvas.alignSelectedElements('c', 'page')
+            this.topPanel.updateContextPanel()
+            $id('se-prompt-dialog').setAttribute('close', true)
+          }
+          // create dummy img so we know the default dimensions
+          let imgWidth = 100
+          let imgHeight = 100
+          const img = new Image()
+          img.style.opacity = 0
+          img.addEventListener('load', () => {
+            imgWidth = img.offsetWidth || img.naturalWidth || img.width
+            imgHeight = img.offsetHeight || img.naturalHeight || img.height
+            insertNewImage(imgWidth, imgHeight)
+          })
+          img.src = result
+        }
+        reader.readAsDataURL(file)
+      }
+    }
+    // create an input with type file to open the filesystem dialog
+    const imgImport = document.createElement('input')
+    imgImport.type = 'file'
+    imgImport.addEventListener('change', importImage)
+    // dropping a svg file will import it in the svg as well
+    this.workarea.addEventListener('drop', importImage)
+
+    const clickClear = async function () {
+      const [x, y] = svgEditor.configObj.curConfig.dimensions
+      const ok = await seConfirm(svgEditor.i18next.t('notification.QwantToClear'))
+      if (ok === 'Cancel') {
+        return
+      }
+      svgEditor.leftPanel.clickSelect()
+      svgEditor.svgCanvas.clear()
+      svgEditor.svgCanvas.setResolution(x, y)
+      svgEditor.updateCanvas(true)
+      svgEditor.zoomImage()
+      svgEditor.layersPanel.populateLayers()
+      svgEditor.topPanel.updateContextPanel()
+      svgEditor.topPanel.updateTitle('untitled.svg')
+    }
+
+    /**
+     * By default,  this.editor.svgCanvas.open() is a no-op. It is up to an extension
+     *  mechanism (opera widget, etc.) to call `setCustomHandlers()` which
+     *  will make it do something.
+     * @returns {void}
+     */
+    const clickOpen = async function () {
+      // ask user before clearing an unsaved SVG
+      const response = await svgEditor.openPrep()
+      if (response === 'Cancel') { return }
+      svgCanvas.clear()
+      try {
+        const blob = await fileOpen({
+          mimeTypes: ['image/*']
+        })
+        const svgContent = await blob.text()
+        await svgEditor.loadSvgString(svgContent)
+        svgEditor.updateCanvas()
+        handle = blob.handle
+        svgEditor.topPanel.updateTitle(blob.name)
+        svgEditor.svgCanvas.runExtensions('onOpenedDocument', {
+          name: blob.name,
+          lastModified: blob.lastModified,
+          size: blob.size,
+          type: blob.type
+        })
+        svgEditor.layersPanel.populateLayers()
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          return console.error(err)
+        }
+      }
+    }
+    const b64toBlob = (b64Data, contentType = '', sliceSize = 512) => {
+      const byteCharacters = atob(b64Data)
+      const byteArrays = []
+      for (let offset = 0; offset &lt; byteCharacters.length; offset += sliceSize) {
+        const slice = byteCharacters.slice(offset, offset + sliceSize)
+        const byteNumbers = new Array(slice.length)
+        for (let i = 0; i &lt; slice.length; i++) {
+          byteNumbers[i] = slice.charCodeAt(i)
+        }
+        const byteArray = new Uint8Array(byteNumbers)
+        byteArrays.push(byteArray)
+      }
+      const blob = new Blob(byteArrays, { type: contentType })
+      return blob
+    }
+
+    /**
+     *
+     * @returns {void}
+     */
+    const clickSave = async function (type) {
+      const $editorDialog = $id('se-svg-editor-dialog')
+      const editingsource = $editorDialog.getAttribute('dialog') === 'open'
+      if (editingsource) {
+        svgEditor.saveSourceEditor()
+      } else {
+        // In the future, more options can be provided here
+        const saveOpts = {
+          images: svgEditor.configObj.pref('img_save'),
+          round_digits: 2
+        }
+        // remove the selected outline before serializing
+        svgCanvas.clearSelection()
+        // Update save options if provided
+        if (saveOpts) {
+          const saveOptions = svgCanvas.mergeDeep(svgCanvas.getSvgOption(), saveOpts)
+          for (const [key, value] of Object.entries(saveOptions)) {
+            svgCanvas.setSvgOption(key, value)
+          }
+        }
+        svgCanvas.setSvgOption('apply', true)
+
+        // no need for doctype, see https://jwatt.org/svg/authoring/#doctype-declaration
+        const svg = '&lt;?xml version="1.0"?>\n' + svgCanvas.svgCanvasToString()
+        const b64Data = svgCanvas.encode64(svg)
+        const blob = b64toBlob(b64Data, 'image/svg+xml')
+        try {
+          if (type === 'save' &amp;&amp; handle !== null) {
+            const throwIfExistingHandleNotGood = false
+            handle = await fileSave(blob, {
+              fileName: 'untitled.svg',
+              extensions: ['.svg']
+            }, handle, throwIfExistingHandleNotGood)
+          } else {
+            handle = await fileSave(blob, {
+              fileName: svgEditor.title,
+              extensions: ['.svg']
+            })
+          }
+          svgEditor.topPanel.updateTitle(handle.name)
+          svgCanvas.runExtensions('onSavedDocument', {
+            name: handle.name,
+            kind: handle.kind
+          })
+        } catch (err) {
+          if (err.name !== 'AbortError') {
+            return console.error(err)
+          }
+        }
+      }
+    }
+
+    return {
+      name: svgEditor.i18next.t(`${name}:name`),
+      // The callback should be used to load the DOM with the appropriate UI items
+      callback () {
+        const buttonTemplate = `
+        &lt;se-menu-item id="tool_clear" label="opensave.new_doc" shortcut="N" src="new.svg">&lt;/se-menu-item>`
+        svgCanvas.insertChildAtIndex($id('main_button'), buttonTemplate, 0)
+        const openButtonTemplate = '&lt;se-menu-item id="tool_open" label="opensave.open_image_doc" src="open.svg">&lt;/se-menu-item>'
+        svgCanvas.insertChildAtIndex($id('main_button'), openButtonTemplate, 1)
+        const saveButtonTemplate = '&lt;se-menu-item id="tool_save" label="opensave.save_doc" shortcut="S" src="saveImg.svg">&lt;/se-menu-item>'
+        svgCanvas.insertChildAtIndex($id('main_button'), saveButtonTemplate, 2)
+        const saveAsButtonTemplate = '&lt;se-menu-item id="tool_save_as" label="opensave.save_as_doc" src="saveImg.svg">&lt;/se-menu-item>'
+        svgCanvas.insertChildAtIndex($id('main_button'), saveAsButtonTemplate, 3)
+        const importButtonTemplate = '&lt;se-menu-item id="tool_import" label="tools.import_doc" src="importImg.svg">&lt;/se-menu-item>'
+        svgCanvas.insertChildAtIndex($id('main_button'), importButtonTemplate, 4)
+
+        // handler
+        $click($id('tool_clear'), clickClear.bind(this))
+        $click($id('tool_open'), clickOpen.bind(this))
+        $click($id('tool_save'), clickSave.bind(this, 'save'))
+        $click($id('tool_save_as'), clickSave.bind(this, 'saveas'))
+        // tool_import pressed with shiftKey will not scale the SVG
+        $click($id('tool_import'), (ev) => { imgImport.shiftKey = ev.shiftKey; imgImport.click() })
+      }
+    }
+  }
+}
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="editor_extensions_ext-layer_view_locale_zh-CN.module_js.html">editor/extensions/ext-layer_view/locale/zh-CN.js</a></li><li><a href="module-SVGEditor.html">SVGEditor</a></li><li><a href="module-contextmenu.html">contextmenu</a></li><li><a href="module-jGraduate.html">jGraduate</a></li><li><a href="module-jPicker.html">jPicker</a></li><li><a href="module-locale.html">locale</a></li></ul><h3>Externals</h3><ul><li><a href="external-JamilihArray.html">JamilihArray</a></li><li><a href="external-Math.html">Math</a></li><li><a href="external-Window.html">Window</a></li><li><a href="external-jQuery.html">jQuery</a></li></ul><h3>Namespaces</h3><ul><li><a href="external-jQuery.fn.html">fn</a></li><li><a href="external-jQuery.fn.$.fn.jPicker.defaults.html">defaults</a></li><li><a href="external-jQuery.fn.exports.jPickerMethod.html">exports.jPickerMethod</a></li><li><a href="external-jQuery.fn.jGraduateDefaults.html">jGraduateDefaults</a></li><li><a href="external-jQuery.fn.jGraduateDefaults.images.html">images</a></li><li><a href="external-jQuery.fn.jGraduateDefaults.window.html">window</a></li><li><a href="external-jQuery.jGraduate.html">jGraduate</a></li><li><a href="external-jQuery.jPicker.html">jPicker</a></li><li><a href="external-jQuery.jPicker.ColorMethods.html">ColorMethods</a></li></ul><h3>Classes</h3><ul><li><a href="BottomPanel.html">BottomPanel</a></li><li><a href="Dropdown.html">Dropdown</a></li><li><a href="EditorStartup.html">EditorStartup</a></li><li><a href="ElixMenuButton.html">ElixMenuButton</a></li><li><a href="ElixNumberSpinBox.html">ElixNumberSpinBox</a></li><li><a href="ExplorerButton.html">ExplorerButton</a></li><li><a href="FlyingButton.html">FlyingButton</a></li><li><a href="LayersPanel.html">LayersPanel</a></li><li><a href="LeftPanel.html">LeftPanel</a></li><li><a href="MainMenu.html">MainMenu</a></li><li><a href="NumberSpinBox.html">NumberSpinBox</a></li><li><a href="PaintBox.html">PaintBox</a></li><li><a href="PlainNumberSpinBox.html">PlainNumberSpinBox</a></li><li><a href="Rulers.html">Rulers</a></li><li><a href="SEInput.html">SEInput</a></li><li><a href="SEPalette.html">SEPalette</a></li><li><a href="SESpinInput.html">SESpinInput</a></li><li><a href="SeCMenuDialog.html">SeCMenuDialog</a></li><li><a href="SeCMenuLayerDialog.html">SeCMenuLayerDialog</a></li><li><a href="SeColorPicker.html">SeColorPicker</a></li><li><a href="SeEditPrefsDialog.html">SeEditPrefsDialog</a></li><li><a href="SeExportDialog.html">SeExportDialog</a></li><li><a href="SeImgPropDialog.html">SeImgPropDialog</a></li><li><a href="SeList.html">SeList</a></li><li><a href="SeMenu.html">SeMenu</a></li><li><a href="SeMenuItem.html">SeMenuItem</a></li><li><a href="SePlainAlertDialog.html">SePlainAlertDialog</a></li><li><a href="SePlainBorderButton.html">SePlainBorderButton</a></li><li><a href="SePromptDialog.html">SePromptDialog</a></li><li><a href="SeStorageDialog.html">SeStorageDialog</a></li><li><a href="SeSvgSourceEditorDialog.html">SeSvgSourceEditorDialog</a></li><li><a href="SeText.html">SeText</a></li><li><a href="ToolButton.html">ToolButton</a></li><li><a href="TopPanel.html">TopPanel</a></li><li><a href="configObj.html">configObj</a></li><li><a href="external-jQuery.jGraduate.Paint.html">Paint</a></li><li><a href="external-jQuery.jPicker.Color.html">Color</a></li><li><a href="module.exports.html">exports</a></li><li><a href="module.exports_module.exports.html">exports</a></li><li><a href="module-SVGEditor-Editor.html">Editor</a></li><li><a href="module-jPicker.module.exports.html">module.exports</a></li></ul><h3>Interfaces</h3><ul><li><a href="module-SVGEditor.Config.html">Config</a></li><li><a href="module-SVGEditor.Prefs.html">Prefs</a></li><li><a href="module-SVGthis.CustomHandler.html">CustomHandler</a></li><li><a href="module-locale.LocaleEditorInit.html">LocaleEditorInit</a></li></ul><h3>Events</h3><ul><li><a href="module-SVGEditor.html#event:event:svgEditorReadyEvent">svgEditorReadyEvent</a></li></ul><h3>Tutorials</h3><ul><li><a href="tutorial-CanvasAPI.html">CanvasAPI</a></li><li><a href="tutorial-Editor.html">Editor</a></li><li><a href="tutorial-EditorAPI.html">EditorAPI</a></li><li><a href="tutorial-Events.html">Events</a></li><li><a href="tutorial-FrequentlyAskedQuestions.html">Frequently Asked Questions (FAQ)</a></li></ul><h3>Global</h3><ul><li><a href="global.html#attributeChangedCallback">attributeChangedCallback</a></li><li><a href="global.html#connectedCallback">connectedCallback</a></li><li><a href="global.html#constructor">constructor</a></li><li><a href="global.html#createTemplate">createTemplate</a></li><li><a href="global.html#decrement">decrement</a></li><li><a href="global.html#expireCookie">expireCookie</a></li><li><a href="global.html#formatValueFormatthenumericvalueasastring.Thisisusedafterincrementing/decrementingthevaluetoreformatthevalueasastring.">formatValue
+Format the numeric value as a string.
+
+This is used after incrementing/decrementing the value to reformat the
+value as a string.</a></li><li><a href="global.html#get">get</a></li><li><a href="global.html#handleClick">handleClick</a></li><li><a href="global.html#handleClose">handleClose</a></li><li><a href="global.html#handleInput">handleInput</a></li><li><a href="global.html#handleKeyDown">handleKeyDown</a></li><li><a href="global.html#handleMouseDown">handleMouseDown</a></li><li><a href="global.html#handleMouseUp">handleMouseUp</a></li><li><a href="global.html#handleOptionsChange">handleOptionsChange</a></li><li><a href="global.html#handleSelect">handleSelect</a></li><li><a href="global.html#handleShow">handleShow</a></li><li><a href="global.html#increment">increment</a></li><li><a href="global.html#init">init</a></li><li><a href="global.html#inputsize">inputsize</a></li><li><a href="global.html#isNullish">isNullish</a></li><li><a href="global.html#loadloadConfig">load load Config</a></li><li><a href="global.html#loadFromURLLoadconfig/datafromURLifgiven">loadFromURL Load config/data from URL if given</a></li><li><a href="global.html#name">name</a></li><li><a href="global.html#observedAttributes">observedAttributes</a></li><li><a href="global.html#parseValue">parseValue</a></li><li><a href="global.html#pref">pref</a></li><li><a href="global.html#readySignal">readySignal</a></li><li><a href="global.html#regexEscape">regexEscape</a></li><li><a href="global.html#removeStoragePrefCookie">removeStoragePrefCookie</a></li><li><a href="global.html#replaceStoragePrompt">replaceStoragePrompt</a></li><li><a href="global.html#resolveModulePathToUrl">resolveModulePathToUrl</a></li><li><a href="global.html#set">set</a></li><li><a href="global.html#setupCurConfig">setupCurConfig</a></li><li><a href="global.html#setupCurPrefs">setupCurPrefs</a></li><li><a href="global.html#src">src</a></li><li><a href="global.html#stateEffects">stateEffects</a></li><li><a href="global.html#stepDown">stepDown</a></li><li><a href="global.html#stepUp">stepUp</a></li><li><a href="global.html#triggerInputChanged">triggerInputChanged</a></li><li><a href="global.html#updateLib">updateLib</a></li><li><a href="global.html#value">value</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.4</a> on Tue Nov 18 2025 06:01:53 GMT+0000 (Coordinated Universal Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

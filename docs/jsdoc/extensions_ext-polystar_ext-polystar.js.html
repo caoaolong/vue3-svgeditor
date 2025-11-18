@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: extensions/ext-polystar/ext-polystar.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: extensions/ext-polystar/ext-polystar.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+ * @file ext-polystar.js
+ *
+ *
+ * @copyright 2010 CloudCanvas, Inc. All rights reserved
+ * @copyright 2021 Optimistik SAS, Inc. All rights reserved
+ * @license MIT
+ *
+ */
+
+const name = 'polystar'
+
+const loadExtensionTranslation = async function (svgEditor) {
+  let translationModule
+  const lang = svgEditor.configObj.pref('lang')
+  try {
+    translationModule = await import(`./locale/${lang}.js`)
+  } catch (_error) {
+    console.warn(`Missing translation (${lang}) for ${name} - using 'en'`)
+    translationModule = await import('./locale/en.js')
+  }
+  svgEditor.i18next.addResourceBundle(lang, name, translationModule.default)
+}
+
+export default {
+  name,
+  async init () {
+    const svgEditor = this
+    const { svgCanvas } = svgEditor
+    const { ChangeElementCommand } = svgCanvas.history
+    const addToHistory = (cmd) => { svgCanvas.undoMgr.addCommandToHistory(cmd) }
+    const { $id, $click } = svgCanvas
+    let selElems
+    let started
+    let newFO
+    await loadExtensionTranslation(svgEditor)
+
+    /**
+     * @param {boolean} on true=display
+     * @param {string} tool "star" or "polygone"
+     * @returns {void}
+     */
+    const showPanel = (on, tool) => {
+      if (on) {
+        $id(`${tool}_panel`).style.removeProperty('display')
+      } else {
+        $id(`${tool}_panel`).style.display = 'none'
+      }
+    }
+
+    /**
+     *
+     * @param {string} attr attribute to change
+     * @param {string|Float} val new value
+     * @returns {void}
+     */
+    const setAttr = (attr, val) => {
+      svgCanvas.changeSelectedAttribute(attr, val)
+      svgCanvas.call('changed', selElems)
+    }
+
+    /**
+     * @param {Float} n angle
+     * @return {Float} cotangeante
+     */
+    const cot = (n) => 1 / Math.tan(n)
+
+    /**
+     * @param {Float} n angle
+     * @returns {Float} sec
+     */
+    const sec = (n) => 1 / Math.cos(n)
+
+    return {
+      name: svgEditor.i18next.t(`${name}:name`),
+      // The callback should be used to load the DOM with the appropriate UI items
+      callback () {
+        // Add the button and its handler(s)
+        // Note: the star extension needs to be loaded before the polygon extension
+        const fbtitle = `${name}:title`
+        const titleStar = `${name}:buttons.0.title`
+        const titlePolygon = `${name}:buttons.1.title`
+        const buttonTemplate = `
+            &lt;se-flyingbutton id="tools_polygon" title="${fbtitle}">
+              &lt;se-button id="tool_star" title="${titleStar}" src="star.svg">
+              &lt;/se-button>
+              &lt;se-button id="tool_polygon" title="${titlePolygon}" src="polygon.svg">
+              &lt;/se-button>
+            &lt;/se-flyingbutton>
+          `
+        svgCanvas.insertChildAtIndex($id('tools_left'), buttonTemplate, 10)
+        // handler
+        $click($id('tool_star'), () => {
+          if (this.leftPanel.updateLeftPanel('tool_star')) {
+            svgCanvas.setMode('star')
+            showPanel(true, 'star')
+            showPanel(false, 'polygon')
+          }
+        })
+        $click($id('tool_polygon'), () => {
+          if (this.leftPanel.updateLeftPanel('tool_polygon')) {
+            svgCanvas.setMode('polygon')
+            showPanel(true, 'polygon')
+            showPanel(false, 'star')
+          }
+        })
+        const label0 = `${name}:contextTools.0.label`
+        const title0 = `${name}:contextTools.0.title`
+        const label1 = `${name}:contextTools.1.label`
+        const title1 = `${name}:contextTools.1.title`
+        const label2 = `${name}:contextTools.2.label`
+        const title2 = `${name}:contextTools.2.title`
+        const label3 = `${name}:contextTools.3.label`
+        const title3 = `${name}:contextTools.3.title`
+        // Add the context panel and its handler(s)
+        const panelTemplate = document.createElement('template')
+        panelTemplate.innerHTML = `
+          &lt;div id="star_panel">
+            &lt;se-spin-input id="starNumPoints" label="${label0}" min=1 step=1 value=5 title="${title0}">
+            &lt;/se-spin-input>
+            &lt;se-spin-input id="RadiusMultiplier" label="${label1}" min=1 step=2.5 value=3 title="${title1}">
+            &lt;/se-spin-input>
+            &lt;se-spin-input id="radialShift" min=0 step=1 value=0 label="${label2}" title="${title2}">
+            &lt;/se-spin-input>
+          &lt;/div>
+          &lt;div id="polygon_panel">
+            &lt;se-spin-input size="3" id="polySides" min=1 step=1 value=5 label="${label3}" title="${title3}">
+            &lt;/se-spin-input>
+          &lt;/div>
+        `
+        // add handlers for the panel
+        $id('tools_top').appendChild(panelTemplate.content.cloneNode(true))
+        // don't display the panels on start
+        showPanel(false, 'star')
+        showPanel(false, 'polygon')
+        $id('starNumPoints').addEventListener('change', (event) => {
+          setAttr('point', event.target.value)
+          const orient = 'point'
+          const point = event.target.value
+          let i = selElems.length
+          while (i--) {
+            const elem = selElems[i]
+            if (elem.hasAttribute('r')) {
+              const oldPoint = elem.getAttribute('point')
+              const oldPoints = elem.getAttribute('points')
+              const radialshift = elem.getAttribute('radialshift')
+              let xpos = 0
+              let ypos = 0
+              if (elem.points) {
+                const list = elem.points
+                const len = list.numberOfItems
+                for (let i = 0; i &lt; len; ++i) {
+                  const pt = list.getItem(i)
+                  xpos += parseFloat(pt.x)
+                  ypos += parseFloat(pt.y)
+                }
+                const cx = xpos / len
+                const cy = ypos / len
+                const circumradius = Number(elem.getAttribute('r'))
+                const inradius = circumradius / elem.getAttribute('starRadiusMultiplier')
+
+                let polyPoints = ''
+                for (let s = 0; point >= s; s++) {
+                  let angle = 2.0 * Math.PI * (s / point)
+                  if (orient === 'point') {
+                    angle -= Math.PI / 2
+                  } else if (orient === 'edge') {
+                    angle = angle + Math.PI / point - Math.PI / 2
+                  }
+
+                  let x = circumradius * Math.cos(angle) + cx
+                  let y = circumradius * Math.sin(angle) + cy
+
+                  polyPoints += x + ',' + y + ' '
+
+                  if (!isNaN(inradius)) {
+                    angle = 2.0 * Math.PI * (s / point) + Math.PI / point
+                    if (orient === 'point') {
+                      angle -= Math.PI / 2
+                    } else if (orient === 'edge') {
+                      angle = angle + Math.PI / point - Math.PI / 2
+                    }
+                    angle += radialshift
+
+                    x = inradius * Math.cos(angle) + cx
+                    y = inradius * Math.sin(angle) + cy
+
+                    polyPoints += x + ',' + y + ' '
+                  }
+                }
+                elem.setAttribute('points', polyPoints)
+                addToHistory(new ChangeElementCommand(elem, { point: oldPoint, points: oldPoints }))
+              }
+            }
+          }
+        })
+        $id('RadiusMultiplier').addEventListener('change', (event) => {
+          setAttr('starRadiusMultiplier', event.target.value)
+        })
+        $id('radialShift').addEventListener('change', (event) => {
+          setAttr('radialshift', event.target.value)
+        })
+        $id('polySides').addEventListener('change', (event) => {
+          setAttr('sides', event.target.value)
+          const sides = event.target.value
+          let i = selElems.length
+          while (i--) {
+            const elem = selElems[i]
+            if (elem.hasAttribute('edge')) {
+              const oldSides = elem.getAttribute('sides')
+              const oldPoints = elem.getAttribute('points')
+              let xpos = 0
+              let ypos = 0
+              if (elem.points) {
+                const list = elem.points
+                const len = list.numberOfItems
+                for (let i = 0; i &lt; len; ++i) {
+                  const pt = list.getItem(i)
+                  xpos += parseFloat(pt.x)
+                  ypos += parseFloat(pt.y)
+                }
+                const cx = xpos / len
+                const cy = ypos / len
+                const edg = elem.getAttribute('edge')
+                const inradius = (edg / 2) * cot(Math.PI / sides)
+                const circumradius = inradius * sec(Math.PI / sides)
+                let points = ''
+                for (let s = 0; sides >= s; s++) {
+                  const angle = (2.0 * Math.PI * s) / sides
+                  const x = circumradius * Math.cos(angle) + cx
+                  const y = circumradius * Math.sin(angle) + cy
+                  points += x + ',' + y + ' '
+                }
+                elem.setAttribute('points', points)
+                addToHistory(new ChangeElementCommand(elem, { sides: oldSides, points: oldPoints }))
+              }
+            }
+          }
+        })
+      },
+      mouseDown (opts) {
+        if (svgCanvas.getMode() === 'star') {
+          const fill = svgCanvas.getColor('fill')
+          const stroke = svgCanvas.getColor('stroke')
+          const strokeWidth = svgCanvas.getStrokeWidth()
+          started = true
+          newFO = svgCanvas.addSVGElementsFromJson({
+            element: 'polygon',
+            attr: {
+              cx: opts.start_x,
+              cy: opts.start_y,
+              id: svgCanvas.getNextId(),
+              shape: 'star',
+              point: $id('starNumPoints').value,
+              r: 0,
+              radialshift: $id('radialShift').value,
+              r2: 0,
+              orient: 'point',
+              fill,
+              stroke,
+              'stroke-width': strokeWidth
+            }
+          })
+          return {
+            started: true
+          }
+        }
+        if (svgCanvas.getMode() === 'polygon') {
+          const fill = svgCanvas.getColor('fill')
+          const stroke = svgCanvas.getColor('stroke')
+          const strokeWidth = svgCanvas.getStrokeWidth()
+          started = true
+          newFO = svgCanvas.addSVGElementsFromJson({
+            element: 'polygon',
+            attr: {
+              cx: opts.start_x,
+              cy: opts.start_y,
+              id: svgCanvas.getNextId(),
+              shape: 'regularPoly',
+              sides: $id('polySides').value,
+              orient: 'x',
+              edge: 0,
+              fill,
+              stroke,
+              'stroke-width': strokeWidth
+            }
+          })
+
+          return {
+            started: true
+          }
+        }
+        return undefined
+      },
+      mouseMove (opts) {
+        if (!started) {
+          return undefined
+        }
+        if (svgCanvas.getMode() === 'star') {
+          const cx = Number(newFO.getAttribute('cx'))
+          const cy = Number(newFO.getAttribute('cy'))
+          const point = Number(newFO.getAttribute('point'))
+          const orient = newFO.getAttribute('orient')
+          const fill = newFO.getAttribute('fill')
+          const stroke = newFO.getAttribute('stroke')
+          const strokeWidth = Number(newFO.getAttribute('stroke-width'))
+          const radialshift = Number(newFO.getAttribute('radialshift'))
+
+          let x = opts.mouse_x
+          let y = opts.mouse_y
+
+          const circumradius =
+            Math.sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy)) / 1.5
+          const RadiusMultiplier = document.getElementById('RadiusMultiplier').value
+          const inradius =
+            circumradius / RadiusMultiplier
+          newFO.setAttribute('r', circumradius)
+          newFO.setAttribute('r2', inradius)
+          newFO.setAttribute('starRadiusMultiplier', RadiusMultiplier)
+
+          let polyPoints = ''
+          for (let s = 0; point >= s; s++) {
+            let angle = 2.0 * Math.PI * (s / point)
+            if (orient === 'point') {
+              angle -= Math.PI / 2
+            } else if (orient === 'edge') {
+              angle = angle + Math.PI / point - Math.PI / 2
+            }
+
+            x = circumradius * Math.cos(angle) + cx
+            y = circumradius * Math.sin(angle) + cy
+
+            polyPoints += x + ',' + y + ' '
+
+            if (!isNaN(inradius)) {
+              angle = 2.0 * Math.PI * (s / point) + Math.PI / point
+              if (orient === 'point') {
+                angle -= Math.PI / 2
+              } else if (orient === 'edge') {
+                angle = angle + Math.PI / point - Math.PI / 2
+              }
+              angle += radialshift
+
+              x = inradius * Math.cos(angle) + cx
+              y = inradius * Math.sin(angle) + cy
+
+              polyPoints += x + ',' + y + ' '
+            }
+          }
+          newFO.setAttribute('points', polyPoints)
+          newFO.setAttribute('fill', fill)
+          newFO.setAttribute('stroke', stroke)
+          newFO.setAttribute('stroke-width', strokeWidth)
+          /* const shape = */ newFO.getAttribute('shape')
+
+          return {
+            started: true
+          }
+        }
+        if (svgCanvas.getMode() === 'polygon') {
+          const cx = Number(newFO.getAttribute('cx'))
+          const cy = Number(newFO.getAttribute('cy'))
+          const sides = Number(newFO.getAttribute('sides'))
+          // const orient = newFO.getAttribute('orient');
+          const fill = newFO.getAttribute('fill')
+          const stroke = newFO.getAttribute('stroke')
+          const strokeWidth = Number(newFO.getAttribute('stroke-width'))
+
+          let x = opts.mouse_x
+          let y = opts.mouse_y
+
+          const edg =
+            Math.sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy)) / 1.5
+          newFO.setAttribute('edge', edg)
+
+          const inradius = (edg / 2) * cot(Math.PI / sides)
+          const circumradius = inradius * sec(Math.PI / sides)
+          let points = ''
+          for (let s = 0; sides >= s; s++) {
+            const angle = (2.0 * Math.PI * s) / sides
+            x = circumradius * Math.cos(angle) + cx
+            y = circumradius * Math.sin(angle) + cy
+
+            points += x + ',' + y + ' '
+          }
+
+          // const poly = newFO.createElementNS(NS.SVG, 'polygon');
+          newFO.setAttribute('points', points)
+          newFO.setAttribute('fill', fill)
+          newFO.setAttribute('stroke', stroke)
+          newFO.setAttribute('stroke-width', strokeWidth)
+          return {
+            started: true
+          }
+        }
+        return undefined
+      },
+      mouseUp () {
+        if (svgCanvas.getMode() === 'star') {
+          const r = newFO.getAttribute('r')
+          return {
+            keep: r !== '0',
+            element: newFO
+          }
+        }
+        if (svgCanvas.getMode() === 'polygon') {
+          const edge = newFO.getAttribute('edge')
+          const keep = edge !== '0'
+          // svgCanvas.addToSelection([newFO], true);
+          return {
+            keep,
+            element: newFO
+          }
+        }
+        return undefined
+      },
+      selectedChanged (opts) {
+        // Use this to update the current selected elements
+        selElems = opts.elems
+        let i = selElems.length
+        // Hide panels if nothing is selected
+        if (!i) {
+          showPanel(false, 'star')
+          showPanel(false, 'polygon')
+          return
+        }
+        while (i--) {
+          const elem = selElems[i]
+          if (elem?.getAttribute('shape') === 'star') {
+            if (opts.selectedElement &amp;&amp; !opts.multiselected) {
+              $id('starNumPoints').value = elem.getAttribute('point')
+              $id('radialShift').value = elem.getAttribute('radialshift')
+              showPanel(true, 'star')
+            } else {
+              showPanel(false, 'star')
+            }
+          } else if (elem?.getAttribute('shape') === 'regularPoly') {
+            if (opts.selectedElement &amp;&amp; !opts.multiselected) {
+              $id('polySides').value = elem.getAttribute('sides')
+              showPanel(true, 'polygon')
+            } else {
+              showPanel(false, 'polygon')
+            }
+          } else {
+            showPanel(false, 'star')
+            showPanel(false, 'polygon')
+          }
+        }
+      }
+    }
+  }
+}
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="editor_extensions_ext-layer_view_locale_zh-CN.module_js.html">editor/extensions/ext-layer_view/locale/zh-CN.js</a></li><li><a href="module-SVGEditor.html">SVGEditor</a></li><li><a href="module-contextmenu.html">contextmenu</a></li><li><a href="module-jGraduate.html">jGraduate</a></li><li><a href="module-jPicker.html">jPicker</a></li><li><a href="module-locale.html">locale</a></li></ul><h3>Externals</h3><ul><li><a href="external-JamilihArray.html">JamilihArray</a></li><li><a href="external-Math.html">Math</a></li><li><a href="external-Window.html">Window</a></li><li><a href="external-jQuery.html">jQuery</a></li></ul><h3>Namespaces</h3><ul><li><a href="external-jQuery.fn.html">fn</a></li><li><a href="external-jQuery.fn.$.fn.jPicker.defaults.html">defaults</a></li><li><a href="external-jQuery.fn.exports.jPickerMethod.html">exports.jPickerMethod</a></li><li><a href="external-jQuery.fn.jGraduateDefaults.html">jGraduateDefaults</a></li><li><a href="external-jQuery.fn.jGraduateDefaults.images.html">images</a></li><li><a href="external-jQuery.fn.jGraduateDefaults.window.html">window</a></li><li><a href="external-jQuery.jGraduate.html">jGraduate</a></li><li><a href="external-jQuery.jPicker.html">jPicker</a></li><li><a href="external-jQuery.jPicker.ColorMethods.html">ColorMethods</a></li></ul><h3>Classes</h3><ul><li><a href="BottomPanel.html">BottomPanel</a></li><li><a href="Dropdown.html">Dropdown</a></li><li><a href="EditorStartup.html">EditorStartup</a></li><li><a href="ElixMenuButton.html">ElixMenuButton</a></li><li><a href="ElixNumberSpinBox.html">ElixNumberSpinBox</a></li><li><a href="ExplorerButton.html">ExplorerButton</a></li><li><a href="FlyingButton.html">FlyingButton</a></li><li><a href="LayersPanel.html">LayersPanel</a></li><li><a href="LeftPanel.html">LeftPanel</a></li><li><a href="MainMenu.html">MainMenu</a></li><li><a href="NumberSpinBox.html">NumberSpinBox</a></li><li><a href="PaintBox.html">PaintBox</a></li><li><a href="PlainNumberSpinBox.html">PlainNumberSpinBox</a></li><li><a href="Rulers.html">Rulers</a></li><li><a href="SEInput.html">SEInput</a></li><li><a href="SEPalette.html">SEPalette</a></li><li><a href="SESpinInput.html">SESpinInput</a></li><li><a href="SeCMenuDialog.html">SeCMenuDialog</a></li><li><a href="SeCMenuLayerDialog.html">SeCMenuLayerDialog</a></li><li><a href="SeColorPicker.html">SeColorPicker</a></li><li><a href="SeEditPrefsDialog.html">SeEditPrefsDialog</a></li><li><a href="SeExportDialog.html">SeExportDialog</a></li><li><a href="SeImgPropDialog.html">SeImgPropDialog</a></li><li><a href="SeList.html">SeList</a></li><li><a href="SeMenu.html">SeMenu</a></li><li><a href="SeMenuItem.html">SeMenuItem</a></li><li><a href="SePlainAlertDialog.html">SePlainAlertDialog</a></li><li><a href="SePlainBorderButton.html">SePlainBorderButton</a></li><li><a href="SePromptDialog.html">SePromptDialog</a></li><li><a href="SeStorageDialog.html">SeStorageDialog</a></li><li><a href="SeSvgSourceEditorDialog.html">SeSvgSourceEditorDialog</a></li><li><a href="SeText.html">SeText</a></li><li><a href="ToolButton.html">ToolButton</a></li><li><a href="TopPanel.html">TopPanel</a></li><li><a href="configObj.html">configObj</a></li><li><a href="external-jQuery.jGraduate.Paint.html">Paint</a></li><li><a href="external-jQuery.jPicker.Color.html">Color</a></li><li><a href="module.exports.html">exports</a></li><li><a href="module.exports_module.exports.html">exports</a></li><li><a href="module-SVGEditor-Editor.html">Editor</a></li><li><a href="module-jPicker.module.exports.html">module.exports</a></li></ul><h3>Interfaces</h3><ul><li><a href="module-SVGEditor.Config.html">Config</a></li><li><a href="module-SVGEditor.Prefs.html">Prefs</a></li><li><a href="module-SVGthis.CustomHandler.html">CustomHandler</a></li><li><a href="module-locale.LocaleEditorInit.html">LocaleEditorInit</a></li></ul><h3>Events</h3><ul><li><a href="module-SVGEditor.html#event:event:svgEditorReadyEvent">svgEditorReadyEvent</a></li></ul><h3>Tutorials</h3><ul><li><a href="tutorial-CanvasAPI.html">CanvasAPI</a></li><li><a href="tutorial-Editor.html">Editor</a></li><li><a href="tutorial-EditorAPI.html">EditorAPI</a></li><li><a href="tutorial-Events.html">Events</a></li><li><a href="tutorial-FrequentlyAskedQuestions.html">Frequently Asked Questions (FAQ)</a></li></ul><h3>Global</h3><ul><li><a href="global.html#attributeChangedCallback">attributeChangedCallback</a></li><li><a href="global.html#connectedCallback">connectedCallback</a></li><li><a href="global.html#constructor">constructor</a></li><li><a href="global.html#createTemplate">createTemplate</a></li><li><a href="global.html#decrement">decrement</a></li><li><a href="global.html#expireCookie">expireCookie</a></li><li><a href="global.html#formatValueFormatthenumericvalueasastring.Thisisusedafterincrementing/decrementingthevaluetoreformatthevalueasastring.">formatValue
+Format the numeric value as a string.
+
+This is used after incrementing/decrementing the value to reformat the
+value as a string.</a></li><li><a href="global.html#get">get</a></li><li><a href="global.html#handleClick">handleClick</a></li><li><a href="global.html#handleClose">handleClose</a></li><li><a href="global.html#handleInput">handleInput</a></li><li><a href="global.html#handleKeyDown">handleKeyDown</a></li><li><a href="global.html#handleMouseDown">handleMouseDown</a></li><li><a href="global.html#handleMouseUp">handleMouseUp</a></li><li><a href="global.html#handleOptionsChange">handleOptionsChange</a></li><li><a href="global.html#handleSelect">handleSelect</a></li><li><a href="global.html#handleShow">handleShow</a></li><li><a href="global.html#increment">increment</a></li><li><a href="global.html#init">init</a></li><li><a href="global.html#inputsize">inputsize</a></li><li><a href="global.html#isNullish">isNullish</a></li><li><a href="global.html#loadloadConfig">load load Config</a></li><li><a href="global.html#loadFromURLLoadconfig/datafromURLifgiven">loadFromURL Load config/data from URL if given</a></li><li><a href="global.html#name">name</a></li><li><a href="global.html#observedAttributes">observedAttributes</a></li><li><a href="global.html#parseValue">parseValue</a></li><li><a href="global.html#pref">pref</a></li><li><a href="global.html#readySignal">readySignal</a></li><li><a href="global.html#regexEscape">regexEscape</a></li><li><a href="global.html#removeStoragePrefCookie">removeStoragePrefCookie</a></li><li><a href="global.html#replaceStoragePrompt">replaceStoragePrompt</a></li><li><a href="global.html#resolveModulePathToUrl">resolveModulePathToUrl</a></li><li><a href="global.html#set">set</a></li><li><a href="global.html#setupCurConfig">setupCurConfig</a></li><li><a href="global.html#setupCurPrefs">setupCurPrefs</a></li><li><a href="global.html#src">src</a></li><li><a href="global.html#stateEffects">stateEffects</a></li><li><a href="global.html#stepDown">stepDown</a></li><li><a href="global.html#stepUp">stepUp</a></li><li><a href="global.html#triggerInputChanged">triggerInputChanged</a></li><li><a href="global.html#updateLib">updateLib</a></li><li><a href="global.html#value">value</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.4</a> on Tue Nov 18 2025 06:01:53 GMT+0000 (Coordinated Universal Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

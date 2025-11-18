@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: Rulers.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: Rulers.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import rulersTemplate from './templates/rulersTemplate.html'
+import SvgCanvas from '@svgedit/svgcanvas'
+
+const { $id, getTypeMap } = SvgCanvas
+
+/**
+ *
+ */
+class Rulers {
+  /**
+   * @type {Module}
+  */
+  constructor (editor) {
+    // Make [1,2,5] array
+    this.rulerIntervals = []
+    for (let i = 0.1; i &lt; 1e5; i *= 10) {
+      this.rulerIntervals.push(i)
+      this.rulerIntervals.push(2 * i)
+      this.rulerIntervals.push(5 * i)
+    }
+    this.svgCanvas = editor.svgCanvas
+    this.editor = editor
+    // add rulers component to the DOM
+    const template = document.createElement('template')
+    template.innerHTML = rulersTemplate
+    this.editor.$svgEditor.append(template.content.cloneNode(true))
+    const { $id } = SvgCanvas
+    this.rulerX = $id('ruler_x')
+    this.rulerY = $id('ruler_y')
+    this.rulerCorner = $id('ruler_corner')
+  }
+
+  display (on) {
+    if (on) {
+      this.rulerX.style.removeProperty('display')
+      this.rulerY.style.removeProperty('display')
+      this.rulerCorner.style.removeProperty('display')
+    } else {
+      this.rulerX.style.display = 'none'
+      this.rulerY.style.display = 'none'
+      this.rulerCorner.style.display = 'none'
+    }
+  }
+
+  /**
+   * @type {Module}
+  */
+  manageScroll () {
+    if (this.rulerX) this.rulerX.scrollLeft = this.editor.workarea.scrollLeft
+    if (this.rulerY) this.rulerY.scrollTop = this.editor.workarea.scrollTop
+  }
+
+  /**
+   *
+   * @param {HTMLDivElement} [scanvas]
+   * @param {Float} [zoom]
+   * @returns {void}
+   */
+  updateRulers (scanvas, zoom) {
+    if (!zoom) { zoom = this.svgCanvas.getZoom() }
+    if (!scanvas) { scanvas = document.getElementById('svgcanvas') }
+
+    let d; let i
+    const limit = 30000
+    const contentElem = this.svgCanvas.getSvgContent()
+    const units = getTypeMap()
+    const unit = units[this.editor.configObj.curConfig.baseUnit] // 1 = 1px
+
+    // draw x ruler then y ruler
+    for (d = 0; d &lt; 2; d++) {
+      const isX = (d === 0)
+      const dim = isX ? 'x' : 'y'
+      const lentype = isX ? 'width' : 'height'
+      const contentDim = Number(contentElem.getAttribute(dim))
+      const $hcanvOrig = $id('ruler_' + dim).querySelector('canvas')
+
+      // Bit of a hack to fully clear the canvas in Safari &amp; IE9
+      const $hcanv = $hcanvOrig.cloneNode(true)
+      $hcanvOrig.replaceWith($hcanv)
+
+      const hcanv = $hcanv
+
+      // Set the canvas size to the width of the container
+      let rulerLen
+      if (lentype === 'width') {
+        rulerLen = parseFloat(getComputedStyle(scanvas, null).width.replace('px', ''))
+      } else if (lentype === 'height') {
+        rulerLen = parseFloat(getComputedStyle(scanvas, null).height.replace('px', ''))
+      }
+      const totalLen = rulerLen
+      hcanv.parentNode.style[lentype] = totalLen + 'px'
+      let ctx = hcanv.getContext('2d')
+      let ctxArr; let num; let ctxArrNum
+
+      ctx.fillStyle = 'rgb(200,0,0)'
+      ctx.fillRect(0, 0, hcanv.width, hcanv.height)
+
+      // Remove any existing canvasses
+      const elements = Array.prototype.filter.call($hcanv.parentNode.children, function (child) {
+        return child !== $hcanv
+      })
+      Array.from(elements).forEach(function (element) {
+        element.remove()
+      })
+
+      // Create multiple canvases when necessary (due to browser limits)
+      if (rulerLen >= limit) {
+        ctxArrNum = Number.parseInt(rulerLen / limit) + 1
+        ctxArr = []
+        ctxArr[0] = ctx
+        let copy
+        for (i = 1; i &lt; ctxArrNum; i++) {
+          hcanv[lentype] = limit
+          copy = hcanv.cloneNode(true)
+          hcanv.parentNode.append(copy)
+          ctxArr[i] = copy.getContext('2d')
+        }
+
+        copy[lentype] = rulerLen % limit
+
+        // set copy width to last
+        rulerLen = limit
+      }
+
+      hcanv[lentype] = rulerLen
+
+      const uMulti = unit * zoom
+
+      // Calculate the main number interval
+      const rawM = 50 / uMulti
+      let multi = 1
+      for (i = 0; i &lt; this.rulerIntervals.length; i++) {
+        num = this.rulerIntervals[i]
+        multi = num
+        if (rawM &lt;= num) {
+          break
+        }
+      }
+
+      const bigInt = multi * uMulti
+
+      ctx.font = '9px sans-serif'
+
+      let rulerD = ((contentDim / uMulti) % multi) * uMulti
+      let labelPos = rulerD - bigInt
+      // draw big intervals
+      let ctxNum = 0
+      while (rulerD &lt; totalLen) {
+        labelPos += bigInt
+        // const realD = rulerD - contentDim; // Currently unused
+
+        const curD = Math.round(rulerD) + 0.5
+        if (isX) {
+          ctx.moveTo(curD, 15)
+          ctx.lineTo(curD, 0)
+        } else {
+          ctx.moveTo(15, curD)
+          ctx.lineTo(0, curD)
+        }
+
+        num = (labelPos - contentDim) / uMulti
+        let label
+        if (multi >= 1) {
+          label = Math.round(num)
+        } else {
+          const decs = String(multi).split('.')[1].length
+          label = num.toFixed(decs)
+        }
+
+        // Change 1000s to Ks
+        if (label !== 0 &amp;&amp; label !== 1000 &amp;&amp; label % 1000 === 0) {
+          label = (label / 1000) + 'K'
+        }
+
+        if (isX) {
+          ctx.fillText(label, rulerD + 2, 8)
+        } else {
+          // draw label vertically
+          const str = String(label).split('')
+          for (i = 0; i &lt; str.length; i++) {
+            ctx.fillText(str[i], 1, (rulerD + 9) + i * 9)
+          }
+        }
+
+        const part = bigInt / 10
+        // draw the small intervals
+        for (i = 1; i &lt; 10; i++) {
+          let subD = Math.round(rulerD + part * i) + 0.5
+          if (ctxArr &amp;&amp; subD > rulerLen) {
+            ctxNum++
+            ctx.stroke()
+            if (ctxNum >= ctxArrNum) {
+              i = 10
+              rulerD = totalLen
+              continue
+            }
+            ctx = ctxArr[ctxNum]
+            rulerD -= limit
+            subD = Math.round(rulerD + part * i) + 0.5
+          }
+
+          // odd lines are slighly longer
+          const lineNum = (i % 2) ? 12 : 10
+          if (isX) {
+            ctx.moveTo(subD, 15)
+            ctx.lineTo(subD, lineNum)
+          } else {
+            ctx.moveTo(15, subD)
+            ctx.lineTo(lineNum, subD)
+          }
+        }
+        rulerD += bigInt
+      }
+      ctx.strokeStyle = '#000'
+      ctx.stroke()
+    }
+  }
+}
+
+export default Rulers
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="editor_extensions_ext-layer_view_locale_zh-CN.module_js.html">editor/extensions/ext-layer_view/locale/zh-CN.js</a></li><li><a href="module-SVGEditor.html">SVGEditor</a></li><li><a href="module-contextmenu.html">contextmenu</a></li><li><a href="module-jGraduate.html">jGraduate</a></li><li><a href="module-jPicker.html">jPicker</a></li><li><a href="module-locale.html">locale</a></li></ul><h3>Externals</h3><ul><li><a href="external-JamilihArray.html">JamilihArray</a></li><li><a href="external-Math.html">Math</a></li><li><a href="external-Window.html">Window</a></li><li><a href="external-jQuery.html">jQuery</a></li></ul><h3>Namespaces</h3><ul><li><a href="external-jQuery.fn.html">fn</a></li><li><a href="external-jQuery.fn.$.fn.jPicker.defaults.html">defaults</a></li><li><a href="external-jQuery.fn.exports.jPickerMethod.html">exports.jPickerMethod</a></li><li><a href="external-jQuery.fn.jGraduateDefaults.html">jGraduateDefaults</a></li><li><a href="external-jQuery.fn.jGraduateDefaults.images.html">images</a></li><li><a href="external-jQuery.fn.jGraduateDefaults.window.html">window</a></li><li><a href="external-jQuery.jGraduate.html">jGraduate</a></li><li><a href="external-jQuery.jPicker.html">jPicker</a></li><li><a href="external-jQuery.jPicker.ColorMethods.html">ColorMethods</a></li></ul><h3>Classes</h3><ul><li><a href="BottomPanel.html">BottomPanel</a></li><li><a href="Dropdown.html">Dropdown</a></li><li><a href="EditorStartup.html">EditorStartup</a></li><li><a href="ElixMenuButton.html">ElixMenuButton</a></li><li><a href="ElixNumberSpinBox.html">ElixNumberSpinBox</a></li><li><a href="ExplorerButton.html">ExplorerButton</a></li><li><a href="FlyingButton.html">FlyingButton</a></li><li><a href="LayersPanel.html">LayersPanel</a></li><li><a href="LeftPanel.html">LeftPanel</a></li><li><a href="MainMenu.html">MainMenu</a></li><li><a href="NumberSpinBox.html">NumberSpinBox</a></li><li><a href="PaintBox.html">PaintBox</a></li><li><a href="PlainNumberSpinBox.html">PlainNumberSpinBox</a></li><li><a href="Rulers.html">Rulers</a></li><li><a href="SEInput.html">SEInput</a></li><li><a href="SEPalette.html">SEPalette</a></li><li><a href="SESpinInput.html">SESpinInput</a></li><li><a href="SeCMenuDialog.html">SeCMenuDialog</a></li><li><a href="SeCMenuLayerDialog.html">SeCMenuLayerDialog</a></li><li><a href="SeColorPicker.html">SeColorPicker</a></li><li><a href="SeEditPrefsDialog.html">SeEditPrefsDialog</a></li><li><a href="SeExportDialog.html">SeExportDialog</a></li><li><a href="SeImgPropDialog.html">SeImgPropDialog</a></li><li><a href="SeList.html">SeList</a></li><li><a href="SeMenu.html">SeMenu</a></li><li><a href="SeMenuItem.html">SeMenuItem</a></li><li><a href="SePlainAlertDialog.html">SePlainAlertDialog</a></li><li><a href="SePlainBorderButton.html">SePlainBorderButton</a></li><li><a href="SePromptDialog.html">SePromptDialog</a></li><li><a href="SeStorageDialog.html">SeStorageDialog</a></li><li><a href="SeSvgSourceEditorDialog.html">SeSvgSourceEditorDialog</a></li><li><a href="SeText.html">SeText</a></li><li><a href="ToolButton.html">ToolButton</a></li><li><a href="TopPanel.html">TopPanel</a></li><li><a href="configObj.html">configObj</a></li><li><a href="external-jQuery.jGraduate.Paint.html">Paint</a></li><li><a href="external-jQuery.jPicker.Color.html">Color</a></li><li><a href="module.exports.html">exports</a></li><li><a href="module.exports_module.exports.html">exports</a></li><li><a href="module-SVGEditor-Editor.html">Editor</a></li><li><a href="module-jPicker.module.exports.html">module.exports</a></li></ul><h3>Interfaces</h3><ul><li><a href="module-SVGEditor.Config.html">Config</a></li><li><a href="module-SVGEditor.Prefs.html">Prefs</a></li><li><a href="module-SVGthis.CustomHandler.html">CustomHandler</a></li><li><a href="module-locale.LocaleEditorInit.html">LocaleEditorInit</a></li></ul><h3>Events</h3><ul><li><a href="module-SVGEditor.html#event:event:svgEditorReadyEvent">svgEditorReadyEvent</a></li></ul><h3>Tutorials</h3><ul><li><a href="tutorial-CanvasAPI.html">CanvasAPI</a></li><li><a href="tutorial-Editor.html">Editor</a></li><li><a href="tutorial-EditorAPI.html">EditorAPI</a></li><li><a href="tutorial-Events.html">Events</a></li><li><a href="tutorial-FrequentlyAskedQuestions.html">Frequently Asked Questions (FAQ)</a></li></ul><h3>Global</h3><ul><li><a href="global.html#attributeChangedCallback">attributeChangedCallback</a></li><li><a href="global.html#connectedCallback">connectedCallback</a></li><li><a href="global.html#constructor">constructor</a></li><li><a href="global.html#createTemplate">createTemplate</a></li><li><a href="global.html#decrement">decrement</a></li><li><a href="global.html#expireCookie">expireCookie</a></li><li><a href="global.html#formatValueFormatthenumericvalueasastring.Thisisusedafterincrementing/decrementingthevaluetoreformatthevalueasastring.">formatValue
+Format the numeric value as a string.
+
+This is used after incrementing/decrementing the value to reformat the
+value as a string.</a></li><li><a href="global.html#get">get</a></li><li><a href="global.html#handleClick">handleClick</a></li><li><a href="global.html#handleClose">handleClose</a></li><li><a href="global.html#handleInput">handleInput</a></li><li><a href="global.html#handleKeyDown">handleKeyDown</a></li><li><a href="global.html#handleMouseDown">handleMouseDown</a></li><li><a href="global.html#handleMouseUp">handleMouseUp</a></li><li><a href="global.html#handleOptionsChange">handleOptionsChange</a></li><li><a href="global.html#handleSelect">handleSelect</a></li><li><a href="global.html#handleShow">handleShow</a></li><li><a href="global.html#increment">increment</a></li><li><a href="global.html#init">init</a></li><li><a href="global.html#inputsize">inputsize</a></li><li><a href="global.html#isNullish">isNullish</a></li><li><a href="global.html#loadloadConfig">load load Config</a></li><li><a href="global.html#loadFromURLLoadconfig/datafromURLifgiven">loadFromURL Load config/data from URL if given</a></li><li><a href="global.html#name">name</a></li><li><a href="global.html#observedAttributes">observedAttributes</a></li><li><a href="global.html#parseValue">parseValue</a></li><li><a href="global.html#pref">pref</a></li><li><a href="global.html#readySignal">readySignal</a></li><li><a href="global.html#regexEscape">regexEscape</a></li><li><a href="global.html#removeStoragePrefCookie">removeStoragePrefCookie</a></li><li><a href="global.html#replaceStoragePrompt">replaceStoragePrompt</a></li><li><a href="global.html#resolveModulePathToUrl">resolveModulePathToUrl</a></li><li><a href="global.html#set">set</a></li><li><a href="global.html#setupCurConfig">setupCurConfig</a></li><li><a href="global.html#setupCurPrefs">setupCurPrefs</a></li><li><a href="global.html#src">src</a></li><li><a href="global.html#stateEffects">stateEffects</a></li><li><a href="global.html#stepDown">stepDown</a></li><li><a href="global.html#stepUp">stepUp</a></li><li><a href="global.html#triggerInputChanged">triggerInputChanged</a></li><li><a href="global.html#updateLib">updateLib</a></li><li><a href="global.html#value">value</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.4</a> on Tue Nov 18 2025 06:01:53 GMT+0000 (Coordinated Universal Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

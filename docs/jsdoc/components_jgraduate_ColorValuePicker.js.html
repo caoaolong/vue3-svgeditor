@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: components/jgraduate/ColorValuePicker.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: components/jgraduate/ColorValuePicker.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
+* @external Math
+*/
+/**
+* @memberof external:Math
+* @param {Float} value
+* @param {Float} precision
+* @returns {Float}
+*/
+function toFixedNumeric (value, precision) {
+  if (precision === undefined) precision = 0
+  return Math.round(value * (10 ** precision)) / (10 ** precision)
+}
+/**
+ * Controls for all the input elements for the typing in color values.
+ */
+export default class ColorValuePicker {
+  /**
+   * @param {external:jQuery} picker
+   * @param {external:jQuery.jPicker.Color} color
+   * @param {external:jQuery.fn.$.fn.jPicker} bindedHex
+   * @param {Float} alphaPrecision
+   */
+  constructor (picker, color, bindedHex, alphaPrecision) {
+    const that = this // private properties and methods
+    const inputs = picker.querySelectorAll('td.Text input')
+    // input box key down - use arrows to alter color
+    /**
+     *
+     * @param {Event} e
+     * @returns {Event|false|void}
+     */
+    function keyDown (e) {
+      if (e.target.value === '' &amp;&amp; e.target !== hex &amp;&amp; ((bindedHex &amp;&amp; e.target !== bindedHex) || !bindedHex)) return undefined
+      if (!validateKey(e)) return e
+      switch (e.target) {
+        case red:
+          switch (e.keyCode) {
+            case 38:
+              red.value = setValueInRange.call(that, (red.value &lt;&lt; 0) + 1, 0, 255)
+              color.val('r', red.value, e.target)
+              return false
+            case 40:
+              red.value = setValueInRange.call(that, (red.value &lt;&lt; 0) - 1, 0, 255)
+              color.val('r', red.value, e.target)
+              return false
+          }
+          break
+        case green:
+          switch (e.keyCode) {
+            case 38:
+              green.value = setValueInRange.call(that, (green.value &lt;&lt; 0) + 1, 0, 255)
+              color.val('g', green.value, e.target)
+              return false
+            case 40:
+              green.value = setValueInRange.call(that, (green.value &lt;&lt; 0) - 1, 0, 255)
+              color.val('g', green.value, e.target)
+              return false
+          }
+          break
+        case blue:
+          switch (e.keyCode) {
+            case 38:
+              blue.value = setValueInRange.call(that, (blue.value &lt;&lt; 0) + 1, 0, 255)
+              color.val('b', blue.value, e.target)
+              return false
+            case 40:
+              blue.value = setValueInRange.call(that, (blue.value &lt;&lt; 0) - 1, 0, 255)
+              color.val('b', blue.value, e.target)
+              return false
+          }
+          break
+        case alpha:
+          switch (e.keyCode) {
+            case 38:
+              alpha.value = setValueInRange.call(that, Number.parseFloat(alpha.value) + 1, 0, 100)
+              color.val('a', toFixedNumeric((alpha.value * 255) / 100, alphaPrecision), e.target)
+              return false
+            case 40:
+              alpha.value = setValueInRange.call(that, Number.parseFloat(alpha.value) - 1, 0, 100)
+              color.val('a', toFixedNumeric((alpha.value * 255) / 100, alphaPrecision), e.target)
+              return false
+          }
+          break
+        case hue:
+          switch (e.keyCode) {
+            case 38:
+              hue.value = setValueInRange.call(that, (hue.value &lt;&lt; 0) + 1, 0, 360)
+              color.val('h', hue.value, e.target)
+              return false
+            case 40:
+              hue.value = setValueInRange.call(that, (hue.value &lt;&lt; 0) - 1, 0, 360)
+              color.val('h', hue.value, e.target)
+              return false
+          }
+          break
+        case saturation:
+          switch (e.keyCode) {
+            case 38:
+              saturation.value = setValueInRange.call(that, (saturation.value &lt;&lt; 0) + 1, 0, 100)
+              color.val('s', saturation.value, e.target)
+              return false
+            case 40:
+              saturation.value = setValueInRange.call(that, (saturation.value &lt;&lt; 0) - 1, 0, 100)
+              color.val('s', saturation.value, e.target)
+              return false
+          }
+          break
+        case value:
+          switch (e.keyCode) {
+            case 38:
+              value.value = setValueInRange.call(that, (value.value &lt;&lt; 0) + 1, 0, 100)
+              color.val('v', value.value, e.target)
+              return false
+            case 40:
+              value.value = setValueInRange.call(that, (value.value &lt;&lt; 0) - 1, 0, 100)
+              color.val('v', value.value, e.target)
+              return false
+          }
+          break
+      }
+      return undefined
+    }
+    // input box key up - validate value and set color
+    /**
+    * @param {Event} e
+    * @returns {Event|void}
+    * @todo Why is this returning an event?
+    */
+    function keyUp (e) {
+      if (e.target.value === '' &amp;&amp; e.target !== hex &amp;&amp;
+        ((bindedHex &amp;&amp; e.target !== bindedHex) ||
+        !bindedHex)) return undefined
+      if (!validateKey(e)) return e
+      switch (e.target) {
+        case red:
+          red.value = setValueInRange.call(that, red.value, 0, 255)
+          color.val('r', red.value, e.target)
+          break
+        case green:
+          green.value = setValueInRange.call(that, green.value, 0, 255)
+          color.val('g', green.value, e.target)
+          break
+        case blue:
+          blue.value = setValueInRange.call(that, blue.value, 0, 255)
+          color.val('b', blue.value, e.target)
+          break
+        case alpha:
+          alpha.value = setValueInRange.call(that, alpha.value, 0, 100)
+          color.val('a', toFixedNumeric((alpha.value * 255) / 100, alphaPrecision), e.target)
+          break
+        case hue:
+          hue.value = setValueInRange.call(that, hue.value, 0, 360)
+          color.val('h', hue.value, e.target)
+          break
+        case saturation:
+          saturation.value = setValueInRange.call(that, saturation.value, 0, 100)
+          color.val('s', saturation.value, e.target)
+          break
+        case value:
+          value.value = setValueInRange.call(that, value.value, 0, 100)
+          color.val('v', value.value, e.target)
+          break
+        case hex:
+          hex.value = hex.value.replace(/[^a-fA-F\d]/g, '').toLowerCase().substring(0, 6)
+          bindedHex &amp;&amp; bindedHex.val(hex.value)
+          color.val('hex', hex.value !== '' ? hex.value : null, e.target)
+          break
+        case bindedHex:
+          bindedHex.value = bindedHex.value.replace(/[^a-fA-F\d]/g, '').toLowerCase().substring(0, 6)
+          hex.val(bindedHex.value)
+          color.val('hex', bindedHex.value !== '' ? bindedHex.value : null, e.target)
+          break
+        case ahex:
+          ahex.value = ahex.value.replace(/[^a-fA-F\d]/g, '').toLowerCase().substring(0, 2)
+          color.val('a', ahex.value ? Number.parseInt(ahex.value, 16) : null, e.target)
+          break
+      }
+      return undefined
+    }
+    // input box blur - reset to original if value empty
+    /**
+    * @param {Event} e
+    * @returns {void}
+    */
+    function blur (e) {
+      if (color.value) {
+        switch (e.target) {
+          case red:
+            color.value = 'r'
+            red.value = color.value
+            break
+          case green:
+            color.value = 'g'
+            green.value = color.value
+            break
+          case blue:
+            color.value = 'b'
+            blue.value = color.value
+            break
+          case alpha:
+            color.value = 'a'
+            alpha.value = toFixedNumeric((color.value * 100) / 255, alphaPrecision)
+            break
+          case hue:
+            color.value = 'h'
+            hue.value = color.value
+            break
+          case saturation:
+            color.value = 's'
+            saturation.value = color.value
+            break
+          case value:
+            color.value = 'v'
+            value.value = color.value
+            break
+          case hex:
+          case bindedHex:
+            color.value = 'hex'
+            hex.value = color.value
+            bindedHex.value = color.value
+            break
+          case ahex:
+            color.value = 'ahex'
+            ahex.value = color.value.substring(6)
+            break
+        }
+      }
+    }
+    /**
+    * @param {Event} e
+    * @returns {boolean}
+    */
+    function validateKey (e) {
+      switch (e.keyCode) {
+        case 9:
+        case 16:
+        case 29:
+        case 37:
+        case 39:
+          return false
+        case 'c'.charCodeAt():
+        case 'v'.charCodeAt():
+          if (e.ctrlKey) return false
+      }
+      return true
+    }
+
+    /**
+    * Constrain value within range.
+    * @param {Float|string} value
+    * @param {Float} min
+    * @param {Float} max
+    * @returns {Float|string} Returns a number or numeric string
+    */
+    function setValueInRange (value, min, max) {
+      if (value === '' || isNaN(value)) return min
+      if (value > max) return max
+      if (value &lt; min) return min
+      return value
+    }
+    /**
+    * @param {external:jQuery} ui
+    * @param {Element} context
+    * @returns {void}
+    */
+    function colorChanged (ui, context) {
+      const all = ui.val('all')
+      if (context !== red) red.value = (all ? all.r : '')
+      if (context !== green) green.value = (all ? all.g : '')
+      if (context !== blue) blue.value = (all ? all.b : '')
+      if (alpha &amp;&amp; context !== alpha) alpha.value = (all ? toFixedNumeric((all.a * 100) / 255, alphaPrecision) : '')
+      if (context !== hue) hue.value = (all ? all.h : '')
+      if (context !== saturation) saturation.value = (all ? all.s : '')
+      if (context !== value) value.value = (all ? all.v : '')
+      if (context !== hex &amp;&amp; ((bindedHex &amp;&amp; context !== bindedHex) || !bindedHex)) hex.value = (all ? all.hex : '')
+      if (bindedHex &amp;&amp; context !== bindedHex &amp;&amp; context !== hex) bindedHex.value = (all ? all.hex : '')
+      if (ahex &amp;&amp; context !== ahex) ahex.value = (all ? all.ahex.substring(6) : '')
+    }
+    /**
+    * Unbind all events and null objects.
+    * @returns {void}
+    */
+    function destroy () {
+      red.removeEventListener('keyup', keyUp)
+      green.removeEventListener('keyup', keyUp)
+      blue.removeEventListener('keyup', keyUp)
+      hue.removeEventListener('keyup', keyUp)
+      saturation.removeEventListener('keyup', keyUp)
+      value.removeEventListener('keyup', keyUp)
+      hex.removeEventListener('keyup', keyUp)
+
+      red.removeEventListener('blur', blur)
+      green.removeEventListener('blur', blur)
+      blue.removeEventListener('blur', blur)
+      hue.removeEventListener('blur', blur)
+      saturation.removeEventListener('blur', blur)
+      value.removeEventListener('blur', blur)
+      hex.removeEventListener('blur', blur)
+
+      red.removeEventListener('keydown', keyDown)
+      green.removeEventListener('keydown', keyDown)
+      blue.removeEventListener('keydown', keyDown)
+      hue.removeEventListener('keydown', keyDown)
+      saturation.removeEventListener('keydown', keyDown)
+      value.removeEventListener('keydown', keyDown)
+
+      if (alpha !== null) {
+        alpha.removeEventListener('keyup', keyUp)
+        alpha.removeEventListener('blur', blur)
+        alpha.removeEventListener('keydown', keyDown)
+      }
+      if (ahex !== null) {
+        ahex.removeEventListener('keyup', keyUp)
+        ahex.removeEventListener('blur', blur)
+      }
+      if (bindedHex !== null) {
+        bindedHex.removeEventListener('keyup', keyUp)
+        bindedHex.removeEventListener('blur', blur)
+      }
+      color.unbind(colorChanged)
+      red = null
+      green = null
+      blue = null
+      alpha = null
+      hue = null
+      saturation = null
+      value = null
+      hex = null
+      ahex = null
+    }
+    let
+      red = inputs[3]
+    let green = inputs[4]
+    let blue = inputs[5]
+    let alpha = inputs.length > 7 ? inputs[6] : null
+    let hue = inputs[0]
+    let saturation = inputs[1]
+    let value = inputs[2]
+    let hex = inputs[(inputs.length > 7) ? 7 : 6]
+    let ahex = inputs.length > 7 ? inputs[8] : null
+    Object.assign(that, { destroy })
+    red.addEventListener('keyup', keyUp)
+    green.addEventListener('keyup', keyUp)
+    blue.addEventListener('keyup', keyUp)
+    hue.addEventListener('keyup', keyUp)
+    saturation.addEventListener('keyup', keyUp)
+    value.addEventListener('keyup', keyUp)
+    hex.addEventListener('keyup', keyUp)
+
+    red.addEventListener('blur', blur)
+    green.addEventListener('blur', blur)
+    blue.addEventListener('blur', blur)
+    hue.addEventListener('blur', blur)
+    saturation.addEventListener('blur', blur)
+    value.addEventListener('blur', blur)
+    hex.addEventListener('blur', blur)
+
+    red.addEventListener('keydown', keyDown)
+    green.addEventListener('keydown', keyDown)
+    blue.addEventListener('keydown', keyDown)
+    hue.addEventListener('keydown', keyDown)
+    saturation.addEventListener('keydown', keyDown)
+    value.addEventListener('keydown', keyDown)
+
+    if (alpha !== null) {
+      alpha.addEventListener('keyup', keyUp)
+      alpha.addEventListener('blur', blur)
+      alpha.addEventListener('keydown', keyDown)
+    }
+    if (ahex !== null) {
+      ahex.addEventListener('keyup', keyUp)
+      ahex.addEventListener('blur', blur)
+    }
+    if (bindedHex !== null) {
+      bindedHex.addEventListener('keyup', keyUp)
+      bindedHex.addEventListener('blur', blur)
+    }
+    color.bind(colorChanged)
+  }
+}
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="editor_extensions_ext-layer_view_locale_zh-CN.module_js.html">editor/extensions/ext-layer_view/locale/zh-CN.js</a></li><li><a href="module-SVGEditor.html">SVGEditor</a></li><li><a href="module-contextmenu.html">contextmenu</a></li><li><a href="module-jGraduate.html">jGraduate</a></li><li><a href="module-jPicker.html">jPicker</a></li><li><a href="module-locale.html">locale</a></li></ul><h3>Externals</h3><ul><li><a href="external-JamilihArray.html">JamilihArray</a></li><li><a href="external-Math.html">Math</a></li><li><a href="external-Window.html">Window</a></li><li><a href="external-jQuery.html">jQuery</a></li></ul><h3>Namespaces</h3><ul><li><a href="external-jQuery.fn.html">fn</a></li><li><a href="external-jQuery.fn.$.fn.jPicker.defaults.html">defaults</a></li><li><a href="external-jQuery.fn.exports.jPickerMethod.html">exports.jPickerMethod</a></li><li><a href="external-jQuery.fn.jGraduateDefaults.html">jGraduateDefaults</a></li><li><a href="external-jQuery.fn.jGraduateDefaults.images.html">images</a></li><li><a href="external-jQuery.fn.jGraduateDefaults.window.html">window</a></li><li><a href="external-jQuery.jGraduate.html">jGraduate</a></li><li><a href="external-jQuery.jPicker.html">jPicker</a></li><li><a href="external-jQuery.jPicker.ColorMethods.html">ColorMethods</a></li></ul><h3>Classes</h3><ul><li><a href="BottomPanel.html">BottomPanel</a></li><li><a href="Dropdown.html">Dropdown</a></li><li><a href="EditorStartup.html">EditorStartup</a></li><li><a href="ElixMenuButton.html">ElixMenuButton</a></li><li><a href="ElixNumberSpinBox.html">ElixNumberSpinBox</a></li><li><a href="ExplorerButton.html">ExplorerButton</a></li><li><a href="FlyingButton.html">FlyingButton</a></li><li><a href="LayersPanel.html">LayersPanel</a></li><li><a href="LeftPanel.html">LeftPanel</a></li><li><a href="MainMenu.html">MainMenu</a></li><li><a href="NumberSpinBox.html">NumberSpinBox</a></li><li><a href="PaintBox.html">PaintBox</a></li><li><a href="PlainNumberSpinBox.html">PlainNumberSpinBox</a></li><li><a href="Rulers.html">Rulers</a></li><li><a href="SEInput.html">SEInput</a></li><li><a href="SEPalette.html">SEPalette</a></li><li><a href="SESpinInput.html">SESpinInput</a></li><li><a href="SeCMenuDialog.html">SeCMenuDialog</a></li><li><a href="SeCMenuLayerDialog.html">SeCMenuLayerDialog</a></li><li><a href="SeColorPicker.html">SeColorPicker</a></li><li><a href="SeEditPrefsDialog.html">SeEditPrefsDialog</a></li><li><a href="SeExportDialog.html">SeExportDialog</a></li><li><a href="SeImgPropDialog.html">SeImgPropDialog</a></li><li><a href="SeList.html">SeList</a></li><li><a href="SeMenu.html">SeMenu</a></li><li><a href="SeMenuItem.html">SeMenuItem</a></li><li><a href="SePlainAlertDialog.html">SePlainAlertDialog</a></li><li><a href="SePlainBorderButton.html">SePlainBorderButton</a></li><li><a href="SePromptDialog.html">SePromptDialog</a></li><li><a href="SeStorageDialog.html">SeStorageDialog</a></li><li><a href="SeSvgSourceEditorDialog.html">SeSvgSourceEditorDialog</a></li><li><a href="SeText.html">SeText</a></li><li><a href="ToolButton.html">ToolButton</a></li><li><a href="TopPanel.html">TopPanel</a></li><li><a href="configObj.html">configObj</a></li><li><a href="external-jQuery.jGraduate.Paint.html">Paint</a></li><li><a href="external-jQuery.jPicker.Color.html">Color</a></li><li><a href="module.exports.html">exports</a></li><li><a href="module.exports_module.exports.html">exports</a></li><li><a href="module-SVGEditor-Editor.html">Editor</a></li><li><a href="module-jPicker.module.exports.html">module.exports</a></li></ul><h3>Interfaces</h3><ul><li><a href="module-SVGEditor.Config.html">Config</a></li><li><a href="module-SVGEditor.Prefs.html">Prefs</a></li><li><a href="module-SVGthis.CustomHandler.html">CustomHandler</a></li><li><a href="module-locale.LocaleEditorInit.html">LocaleEditorInit</a></li></ul><h3>Events</h3><ul><li><a href="module-SVGEditor.html#event:event:svgEditorReadyEvent">svgEditorReadyEvent</a></li></ul><h3>Tutorials</h3><ul><li><a href="tutorial-CanvasAPI.html">CanvasAPI</a></li><li><a href="tutorial-Editor.html">Editor</a></li><li><a href="tutorial-EditorAPI.html">EditorAPI</a></li><li><a href="tutorial-Events.html">Events</a></li><li><a href="tutorial-FrequentlyAskedQuestions.html">Frequently Asked Questions (FAQ)</a></li></ul><h3>Global</h3><ul><li><a href="global.html#attributeChangedCallback">attributeChangedCallback</a></li><li><a href="global.html#connectedCallback">connectedCallback</a></li><li><a href="global.html#constructor">constructor</a></li><li><a href="global.html#createTemplate">createTemplate</a></li><li><a href="global.html#decrement">decrement</a></li><li><a href="global.html#expireCookie">expireCookie</a></li><li><a href="global.html#formatValueFormatthenumericvalueasastring.Thisisusedafterincrementing/decrementingthevaluetoreformatthevalueasastring.">formatValue
+Format the numeric value as a string.
+
+This is used after incrementing/decrementing the value to reformat the
+value as a string.</a></li><li><a href="global.html#get">get</a></li><li><a href="global.html#handleClick">handleClick</a></li><li><a href="global.html#handleClose">handleClose</a></li><li><a href="global.html#handleInput">handleInput</a></li><li><a href="global.html#handleKeyDown">handleKeyDown</a></li><li><a href="global.html#handleMouseDown">handleMouseDown</a></li><li><a href="global.html#handleMouseUp">handleMouseUp</a></li><li><a href="global.html#handleOptionsChange">handleOptionsChange</a></li><li><a href="global.html#handleSelect">handleSelect</a></li><li><a href="global.html#handleShow">handleShow</a></li><li><a href="global.html#increment">increment</a></li><li><a href="global.html#init">init</a></li><li><a href="global.html#inputsize">inputsize</a></li><li><a href="global.html#isNullish">isNullish</a></li><li><a href="global.html#loadloadConfig">load load Config</a></li><li><a href="global.html#loadFromURLLoadconfig/datafromURLifgiven">loadFromURL Load config/data from URL if given</a></li><li><a href="global.html#name">name</a></li><li><a href="global.html#observedAttributes">observedAttributes</a></li><li><a href="global.html#parseValue">parseValue</a></li><li><a href="global.html#pref">pref</a></li><li><a href="global.html#readySignal">readySignal</a></li><li><a href="global.html#regexEscape">regexEscape</a></li><li><a href="global.html#removeStoragePrefCookie">removeStoragePrefCookie</a></li><li><a href="global.html#replaceStoragePrompt">replaceStoragePrompt</a></li><li><a href="global.html#resolveModulePathToUrl">resolveModulePathToUrl</a></li><li><a href="global.html#set">set</a></li><li><a href="global.html#setupCurConfig">setupCurConfig</a></li><li><a href="global.html#setupCurPrefs">setupCurPrefs</a></li><li><a href="global.html#src">src</a></li><li><a href="global.html#stateEffects">stateEffects</a></li><li><a href="global.html#stepDown">stepDown</a></li><li><a href="global.html#stepUp">stepUp</a></li><li><a href="global.html#triggerInputChanged">triggerInputChanged</a></li><li><a href="global.html#updateLib">updateLib</a></li><li><a href="global.html#value">value</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.4</a> on Tue Nov 18 2025 06:01:53 GMT+0000 (Coordinated Universal Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>
