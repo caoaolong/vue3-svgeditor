@@ -65,6 +65,55 @@ class Editor extends EditorStartup {
     this.configObj = new ConfigObj(this)
     this.configObj.pref = this.configObj.pref.bind(this.configObj)
     this.setConfig = this.configObj.setConfig.bind(this.configObj)
+    
+    // 自动检测并设置正确的图片路径（用于 npm 包环境）
+    // 注意：需要在 curConfig 初始化后执行
+    if (typeof import.meta !== 'undefined' && import.meta.url) {
+      try {
+        const currentUrl = new URL(import.meta.url)
+        const pathname = currentUrl.pathname
+        
+        // 查找 vue3-svgedit 包的位置
+        let packageBasePath = null
+        const vue3Index = pathname.indexOf('vue3-svgedit')
+        
+        if (vue3Index !== -1) {
+          packageBasePath = pathname.substring(0, vue3Index + 'vue3-svgedit'.length)
+        } else if (pathname.includes('node_modules')) {
+          const nodeModulesIndex = pathname.indexOf('node_modules')
+          const afterNodeModules = pathname.substring(nodeModulesIndex + 'node_modules'.length + 1)
+          const firstSlash = afterNodeModules.indexOf('/')
+          if (firstSlash !== -1) {
+            const packageName = afterNodeModules.substring(0, firstSlash)
+            if (packageName === 'vue3-svgedit') {
+              packageBasePath = pathname.substring(0, nodeModulesIndex + 'node_modules'.length + 1 + firstSlash)
+            }
+          }
+        } else if (pathname.startsWith('/@fs/') && pathname.includes('svgedit')) {
+          // Vite /@fs/ 路径
+          const svgeditIndex = pathname.indexOf('svgedit')
+          if (svgeditIndex !== -1) {
+            packageBasePath = pathname.substring(0, svgeditIndex + 'svgedit'.length)
+          }
+        }
+        
+        // 确保 curConfig 已初始化，并且 imgPath 存在
+        // 注意：curConfig 可能在构造函数时还未完全初始化，所以需要检查 defaultConfig
+        const imgPath = this.configObj.curConfig?.imgPath || this.configObj.defaultConfig?.imgPath
+        if (packageBasePath && imgPath && typeof imgPath === 'string' && imgPath.startsWith('./')) {
+          // 设置正确的图片路径
+          // 如果 curConfig 已初始化，直接设置；否则设置到 defaultConfig
+          if (this.configObj.curConfig) {
+            this.configObj.curConfig.imgPath = `${packageBasePath}/dist/vue3/images/`
+          }
+          if (this.configObj.defaultConfig) {
+            this.configObj.defaultConfig.imgPath = `${packageBasePath}/dist/vue3/images/`
+          }
+        }
+      } catch (e) {
+        console.warn('无法自动检测图片路径，使用默认路径', e)
+      }
+    }
     this.callbacks = []
     this.curContext = null
     this.exportWindowName = null

@@ -672,7 +672,56 @@ class EditorStartup {
             /**
              * @type {module:SVGthis.ExtensionObject}
              */
-            const extPath = this.configObj.curConfig.extPath
+            let extPath = this.configObj.curConfig.extPath
+            // 如果是相对路径，尝试解析为包路径（用于 npm 包环境）
+            if (extPath.startsWith('./')) {
+              try {
+                // 方法 1: 尝试使用 import.meta.resolve (如果支持)
+                if (typeof import.meta !== 'undefined' && import.meta.resolve) {
+                  try {
+                    const resolved = import.meta.resolve('vue3-svgedit/dist/vue3/extensions')
+                    extPath = resolved.replace(/\/extensions$/, '')
+                  } catch (e) {
+                    // import.meta.resolve 不支持，继续尝试其他方法
+                  }
+                }
+                
+                // 方法 2: 使用 import.meta.url 解析
+                if (extPath.startsWith('./') && typeof import.meta !== 'undefined' && import.meta.url) {
+                  const currentUrl = new URL(import.meta.url)
+                  const pathname = currentUrl.pathname
+                  
+                  // 查找 vue3-svgedit 包的位置
+                  const vue3Index = pathname.indexOf('vue3-svgedit')
+                  if (vue3Index !== -1) {
+                    // 找到包名，构建扩展路径
+                    const packagePath = pathname.substring(0, vue3Index + 'vue3-svgedit'.length)
+                    extPath = `${packagePath}/dist/vue3/extensions`
+                  } else if (pathname.includes('node_modules')) {
+                    // 在 node_modules 中但没找到包名，尝试从 Editor.js 的位置推断
+                    const editorIndex = pathname.lastIndexOf('/Editor.js')
+                    if (editorIndex !== -1) {
+                      const basePath = pathname.substring(0, editorIndex)
+                      extPath = `${basePath}/extensions`
+                    }
+                  } else if (pathname.includes('dist/vue3')) {
+                    // 直接包含 dist/vue3，说明在包内
+                    const basePath = pathname.substring(0, pathname.lastIndexOf('/'))
+                    extPath = `${basePath}/extensions`
+                  }
+                }
+                
+                // 方法 3: 如果以上都失败，尝试使用包名路径（让模块解析器处理）
+                if (extPath.startsWith('./')) {
+                  extPath = 'vue3-svgedit/dist/vue3/extensions'
+                }
+              } catch (e) {
+                // 如果所有解析都失败，使用包名路径作为最后手段
+                if (extPath.startsWith('./')) {
+                  extPath = 'vue3-svgedit/dist/vue3/extensions'
+                }
+              }
+            }
             const imported = await import(`${extPath}/${encodeURIComponent(extname)}/${encodeURIComponent(extname)}.js`)
             const { name = extname, init: initfn } = imported.default
             return this.addExtension(name, (initfn && initfn.bind(this)), { langParam: 'en' }) /** @todo  change to current lng */

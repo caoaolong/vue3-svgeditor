@@ -277,13 +277,49 @@ svgEditor.svgCanvas.bind('changed', (event) => {
 })
 ```
 
+#### Extension Path Configuration
+
+If extensions fail to load (404 errors), you may need to explicitly set the `extPath` configuration:
+
+```javascript
+import Editor from 'vue3-svgedit'
+import 'vue3-svgedit/css'
+
+// Get the base path of the package
+const getExtPath = () => {
+  // Method 1: Using import.meta.url (recommended for Vite)
+  if (import.meta.url) {
+    const url = new URL(import.meta.url)
+    const pathname = url.pathname
+    if (pathname.includes('node_modules')) {
+      const basePath = pathname.substring(0, pathname.indexOf('vue3-svgedit') + 'vue3-svgedit'.length)
+      return `${basePath}/dist/vue3/extensions`
+    }
+  }
+  // Method 2: Fallback - adjust based on your build setup
+  return 'vue3-svgedit/dist/vue3/extensions'
+}
+
+const editor = new Editor(containerElement)
+editor.setConfig({
+  extPath: getExtPath(), // Set the extension path
+  allowInitialUserOverride: true,
+  extensions: [],
+  noDefaultExtensions: false,
+  userExtensions: []
+})
+await editor.init()
+```
+
+**Note**: The code attempts to auto-detect the path, but in some build environments (especially with Vite), you may need to set it manually.
+
 #### Important Notes
 
 1. **Container Size**: The editor container must have explicit width and height (not 'auto')
 2. **CSS Import**: Always import the CSS file: `import 'vue3-svgedit/css'`
 3. **Async Initialization**: The `init()` method is async, wait for it to complete before using the editor
 4. **Lifecycle Management**: Clean up the editor in `onBeforeUnmount` to prevent memory leaks
-5. **Extension Path**: Extensions are automatically loaded from the correct path in the Vue3 build
+5. **Extension Path**: If extensions fail to load, manually set `extPath` in the config (see above)
 
 ## I want to build my own svg editor
 You can just use the underlying canvas and use it in your application with your favorite framework.
