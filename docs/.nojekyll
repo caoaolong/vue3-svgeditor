@@ -1,0 +1,4 @@
+# GitHub Pages 配置
+# 这个文件告诉 GitHub Pages 不要使用 Jekyll 处理
+# 因为 JSDoc 生成的文档已经是静态 HTML 文件
+

@@ -1,0 +1,8 @@
+# GitHub Pages Jekyll 配置（如果使用 Jekyll）
+# 注意：由于我们使用了 .nojekyll，这个文件可能不会被使用
+# 但保留它以防需要
+
+theme: jekyll-theme-minimal
+title: SVGEdit Documentation
+description: Complete API documentation and tutorials for SVGEdit
+

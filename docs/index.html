@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SVGEdit Documentation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f5f5f5;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 3rem 0;
+            text-align: center;
+            margin-bottom: 3rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        header h1 {
+            font-size: 3rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+        
+        .content {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-bottom: 3rem;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 2rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+        }
+        
+        .card h2 {
+            color: #667eea;
+            margin-bottom: 1rem;
+            font-size: 1.5rem;
+        }
+        
+        .card ul {
+            list-style: none;
+        }
+        
+        .card ul li {
+            margin: 0.5rem 0;
+        }
+        
+        .card ul li a {
+            color: #333;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            padding: 0.5rem;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+        
+        .card ul li a:hover {
+            background: #f0f0f0;
+            color: #667eea;
+        }
+        
+        .card ul li a::before {
+            content: "→";
+            margin-right: 0.5rem;
+            color: #667eea;
+        }
+        
+        .quick-links {
+            background: white;
+            border-radius: 8px;
+            padding: 2rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .quick-links h2 {
+            color: #667eea;
+            margin-bottom: 1rem;
+        }
+        
+        .quick-links .links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        
+        .quick-links .links a {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+        
+        .quick-links .links a:hover {
+            background: #5568d3;
+        }
+        
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+            margin-top: 3rem;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>SVGEdit Documentation</h1>
+        <p>Complete API documentation and tutorials</p>
+    </header>
+    
+    <div class="container">
+        <div class="content">
+            <div class="card">
+                <h2>API Documentation</h2>
+                <ul>
+                    <li><a href="jsdoc/index.html">JSDoc API Reference</a></li>
+                    <li><a href="jsdoc/module-SVGEditor.html">SVGEditor Module</a></li>
+                    <li><a href="jsdoc/module-SVGEditor.Config.html">Configuration Options</a></li>
+                    <li><a href="jsdoc/Editor.js.html">Editor Class</a></li>
+                </ul>
+            </div>
+            
+            <div class="card">
+                <h2>Tutorials</h2>
+                <ul>
+                    <li><a href="jsdoc/tutorial-Editor.html">Editor Tutorial</a></li>
+                    <li><a href="jsdoc/tutorial-EditorAPI.html">Editor API</a></li>
+                    <li><a href="jsdoc/tutorial-CanvasAPI.html">Canvas API</a></li>
+                    <li><a href="jsdoc/tutorial-ExtensionDocs.html">Extension Development</a></li>
+                    <li><a href="jsdoc/tutorial-ConfigOptions.html">Configuration Options</a></li>
+                    <li><a href="jsdoc/tutorial-Events.html">Events</a></li>
+                    <li><a href="jsdoc/tutorial-LocaleDocs.html">Localization</a></li>
+                    <li><a href="jsdoc/tutorial-FrequentlyAskedQuestions.html">FAQ</a></li>
+                </ul>
+            </div>
+            
+            <div class="card">
+                <h2>Guides</h2>
+                <ul>
+                    <li><a href="https://github.com/SVG-Edit/svgedit/blob/main/docs/Development.md" target="_blank">Development Guide</a></li>
+                    <li><a href="https://github.com/SVG-Edit/svgedit/blob/main/docs/Contributing.md" target="_blank">Contributing</a></li>
+                    <li><a href="https://github.com/SVG-Edit/svgedit/blob/main/docs/Accessibility.md" target="_blank">Accessibility</a></li>
+                    <li><a href="https://github.com/SVG-Edit/svgedit/blob/main/docs/ReleaseInstructions.md" target="_blank">Release Instructions</a></li>
+                </ul>
+            </div>
+            
+            <div class="card">
+                <h2>Version History</h2>
+                <ul>
+                    <li><a href="https://github.com/SVG-Edit/svgedit/blob/main/docs/versions/6.0.0.md" target="_blank">Version 6.0.0</a></li>
+                    <li><a href="https://github.com/SVG-Edit/svgedit/blob/main/docs/versions/5.0.0.md" target="_blank">Version 5.0.0</a></li>
+                    <li><a href="https://github.com/SVG-Edit/svgedit/blob/main/docs/versions/4.0.0.md" target="_blank">Version 4.0.0</a></li>
+                    <li><a href="https://github.com/SVG-Edit/svgedit/blob/main/docs/versions/3.0.0.md" target="_blank">Version 3.0.0</a></li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="quick-links">
+            <h2>Quick Links</h2>
+            <div class="links">
+                <a href="jsdoc/index.html">📚 Full API Documentation</a>
+                <a href="jsdoc/tutorial-Editor.html">🚀 Getting Started</a>
+                <a href="jsdoc/tutorial-ExtensionDocs.html">🔌 Extension Guide</a>
+                <a href="https://github.com/SVG-Edit/svgedit">💻 GitHub Repository</a>
+            </div>
+        </div>
+    </div>
+    
+    <footer>
+        <p>SVGEdit Documentation | Generated with JSDoc</p>
+    </footer>
+</body>
+</html>
+
