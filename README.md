@@ -73,6 +73,8 @@ V7 is changing significantly the way to integrate and customize SVGEdit. You can
 
 **Warning: This `div` can be positioned anywhere in the DOM but it must have a numeric width and a numeric height (i.e. not 'auto' which happens when the `div` is hidden)**
 
+### Basic HTML Integration
+
 ```html
 <head>
    <!-- You need to include the CSS for SVGEdit somewhere in your application -->
@@ -101,6 +103,187 @@ V7 is changing significantly the way to integrate and customize SVGEdit. You can
 </script>
 </html>
 ```
+
+### Vue3 Integration
+
+This package provides a Vue3-compatible build. To use it in a Vue3 project:
+
+#### Installation
+
+```bash
+npm install vue3-svgedit
+```
+
+#### Basic Usage
+
+```vue
+<template>
+  <div ref="editorContainer" style="width: 100%; height: 600px;"></div>
+</template>
+
+<script setup>
+import { ref, onMounted, onBeforeUnmount } from 'vue'
+import Editor from 'vue3-svgedit'
+import 'vue3-svgedit/css'
+
+const editorContainer = ref(null)
+let svgEditor = null
+
+onMounted(async () => {
+  if (!editorContainer.value) return
+  
+  // 创建编辑器实例
+  svgEditor = new Editor(editorContainer.value)
+  
+  // 设置配置
+  svgEditor.setConfig({
+    allowInitialUserOverride: true,
+    extensions: [],
+    noDefaultExtensions: false,
+    userExtensions: []
+  })
+  
+  // 初始化编辑器
+  await svgEditor.init()
+  
+  // 监听变化事件
+  if (svgEditor.svgCanvas) {
+    svgEditor.svgCanvas.bind('changed', (event) => {
+      const svgString = svgEditor.svgCanvas.getSvgString()
+      console.log('SVG 内容已更改:', svgString)
+    })
+  }
+})
+
+onBeforeUnmount(() => {
+  if (svgEditor) {
+    svgEditor.destroy?.()
+    svgEditor = null
+  }
+})
+</script>
+```
+
+#### Using as a Reusable Component
+
+```vue
+<template>
+  <div ref="editorContainer" class="svg-editor-container"></div>
+</template>
+
+<script setup>
+import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import Editor from 'vue3-svgedit'
+import 'vue3-svgedit/css'
+
+const props = defineProps({
+  config: {
+    type: Object,
+    default: () => ({
+      allowInitialUserOverride: true,
+      extensions: [],
+      noDefaultExtensions: false,
+      userExtensions: []
+    })
+  }
+})
+
+const emit = defineEmits(['ready', 'change'])
+
+const editorContainer = ref(null)
+let svgEditor = null
+
+onMounted(async () => {
+  if (!editorContainer.value) {
+    console.error('Editor container not found')
+    return
+  }
+
+  try {
+    svgEditor = new Editor(editorContainer.value)
+    svgEditor.setConfig(props.config)
+    await svgEditor.init()
+    
+    if (svgEditor.svgCanvas) {
+      svgEditor.svgCanvas.bind('changed', (event) => {
+        emit('change', {
+          svg: svgEditor.svgCanvas.getSvgString(),
+          event
+        })
+      })
+    }
+    
+    emit('ready', svgEditor)
+  } catch (error) {
+    console.error('Failed to initialize SVG Editor:', error)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (svgEditor) {
+    try {
+      svgEditor.destroy?.()
+    } catch (error) {
+      console.warn('Error destroying editor:', error)
+    }
+    svgEditor = null
+  }
+})
+
+watch(() => props.config, (newConfig) => {
+  if (svgEditor && newConfig) {
+    svgEditor.setConfig(newConfig)
+  }
+}, { deep: true })
+
+// 暴露方法给父组件
+defineExpose({
+  getEditor: () => svgEditor,
+  getSvg: () => svgEditor?.svgCanvas?.getSvgString(),
+  setSvg: (svgString) => {
+    if (svgEditor?.svgCanvas) {
+      svgEditor.svgCanvas.setSvgString(svgString)
+    }
+  }
+})
+</script>
+
+<style scoped>
+.svg-editor-container {
+  width: 100%;
+  height: 100%;
+  min-height: 500px;
+}
+</style>
+```
+
+#### Common Operations
+
+**Get SVG content:**
+```javascript
+const svgString = svgEditor.svgCanvas.getSvgString()
+```
+
+**Set SVG content:**
+```javascript
+svgEditor.svgCanvas.setSvgString('<svg>...</svg>')
+```
+
+**Listen to changes:**
+```javascript
+svgEditor.svgCanvas.bind('changed', (event) => {
+  const svg = svgEditor.svgCanvas.getSvgString()
+  // Handle the change
+})
+```
+
+#### Important Notes
+
+1. **Container Size**: The editor container must have explicit width and height (not 'auto')
+2. **CSS Import**: Always import the CSS file: `import 'vue3-svgedit/css'`
+3. **Async Initialization**: The `init()` method is async, wait for it to complete before using the editor
+4. **Lifecycle Management**: Clean up the editor in `onBeforeUnmount` to prevent memory leaks
+5. **Extension Path**: Extensions are automatically loaded from the correct path in the Vue3 build
 
 ## I want to build my own svg editor
 You can just use the underlying canvas and use it in your application with your favorite framework.
